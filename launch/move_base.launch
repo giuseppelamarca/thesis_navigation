@@ -1,0 +1,29 @@
+<launch>
+  <arg name="base_global_planner" default="navfn/NavfnROS"/>
+  <!--<arg name="base_local_planner" default="dwa_local_planner/DWAPlannerROS"/>-->
+
+  <arg name="base_local_planner" default="base_local_planner/TrajectoryPlannerROS"/>
+  <node pkg="move_base" type="move_base" respawn="false" name="move_base" output="screen">
+    <param name="base_global_planner" value="$(arg base_global_planner)"/>
+    <param name="base_local_planner" value="$(arg base_local_planner)"/>
+    <!-- <rosparam file="$(find husky_navigation)/config/planner.yaml" command="load"/> -->
+
+    <!-- observation sources located in costmap_common.yaml -->
+    <rosparam file="$(find smart_sim)/config/costmap_common.yaml" command="load" ns="global_costmap" />
+    <rosparam file="$(find smart_sim)/config/costmap_common.yaml" command="load" ns="local_costmap" />
+
+    <!-- local costmap, needs size -->
+    <rosparam file="$(find smart_sim)/config/costmap_local.yaml" command="load" ns="local_costmap" />
+
+    <!-- static global costmap, static map provides size -->
+    <rosparam file="$(find smart_sim)/config/costmap_global_static.yaml" command="load" ns="global_costmap"/>
+    
+
+    <param name="TrajectoryPlannerROS/sim_time" value="2.0"/>
+    <param name="TrajectoryPlannerROS/min_vel_x" value="0.05"/>
+    <param name="TrajectoryPlannerROS/escape_vel" value="-0.01"/>
+    <param name="TrajectoryPlannerROS/backup_vel" value="0.05"/>
+  </node>
+
+</launch>
+

@@ -1,0 +1,35 @@
+<launch>  
+  <arg name="sim_map" default="$(find smart_sim)/maps/sim_map.yaml"/>
+  <arg name="scan_topic" default="scan" />
+  <arg name="use_map_topic" default="true"/>
+
+  <!-- launch configuration costmap-->
+  <rosparam file="$(find smart_sim)/config/costmap_common.yaml" command="load" />
+  <rosparam file="$(find smart_sim)/config/costmap_global_static.yaml" command="load" />
+  <rosparam file="$(find smart_sim)/config/costmap_local.yaml" command="load" /> 
+
+  <!-- added to allow transformation in rviz -->
+  <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher"/>
+  <node name="robot_state_publisher" pkg="robot_state_publisher" type="state_publisher" />
+
+  <!--added to allow visualizzation of map in rviz
+  <node pkg="gmapping" type="slam_gmapping" name="slam_gmapping" output="screen"/>-->
+ 
+
+  <!-- launch the AMCL-->
+  <include file="$(find smart_sim)/launch/amcl.launch">
+    <arg name="scan_topic" value="$(arg scan_topic)"/>
+    <arg name="use_map_topic" value="$(arg use_map_topic)"/>
+  </include>   
+
+  <!-- launch the map -->
+  <node pkg="map_server" type="map_server" name="map" output="screen" args="$(arg sim_map)"/>
+   
+  <node pkg="rviz" type="rviz" name="rviz" output="screen" args="-d $(find smart_sim)/rviz/rviz_config.rviz"/>
+
+
+  <!-- launch the GMAPPING -->
+  <include file="$(find smart_sim)/launch/slam_gmapping.launch"/>
+
+  
+</launch>
