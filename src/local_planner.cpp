@@ -9,6 +9,7 @@
  PLUGINLIB_EXPORT_CLASS(local_planner::LocalPlanner, nav_core::BaseLocalPlanner)
 
  using namespace std;
+  ros::NodeHandle private_nh;
 
   class Point{
   public:
@@ -33,33 +34,6 @@ void local_costmap_callback(const nav_msgs::OccupancyGrid &costmap){
 
  //Default Constructor
  namespace local_planner {
-
-/*
- int LocalPlanner::nearestPoint(const int start_point, const tf::Stamped<tf::Pose> & pose) {
-    int plan_point = start_point;
-    double best_metric = std::numeric_limits<double>::max();
-    //// ACTIVATING THIS PIECE OF CODE FORCE THE ROBOT TO PASS AS CLOSE AS POSSIBLE TO THE GLOBAL PLAN ///
-    double start_dist = base_local_planner::getGoalPositionDistance(pose, plan_[start_point].pose.position.x, plan_[start_point].pose.position.y);
-    if (start_dist>0.3)
-      return start_point;
-    //// END ACTIVATION ///
-    for( int i=start_point; i<plan_.size(); i++ ) {
-      double dist = base_local_planner::getGoalPositionDistance(pose, plan_[i].pose.position.x, plan_[i].pose.position.y);
-      //ROS_INFO("pose in nearest_point: %f, %f", pose.getOrigin().x(), pose.getOrigin().y());
-      //ROS_INFO("dist: %f", dist);
-      double metric = dist;
-      //ROS_INFO_NAMED("ackermann_planner", "Distance to path: %f", dist);
-      if( metric < best_metric && std::find(visited_index.begin(), visited_index.end(), i)==visited_index.end()) {
-        visited_index.push_back(i);
-        best_metric = metric;
-        plan_point = i;
-      }
-    }
-    for (int i =0; i<visited_index.size(); i++)
-      //ROS_INFO("visited_index: %d", visited_index[i]);
-    return plan_point;
-  }*/
-
 int LocalPlanner::nearestPoint(const int start_point, const tf::Stamped<tf::Pose> & pose) {
     int plan_point = start_point;
     double best_metric = std::numeric_limits<double>::max();
@@ -70,10 +44,7 @@ int LocalPlanner::nearestPoint(const int start_point, const tf::Stamped<tf::Pose
     //// END ACTIVATION ///
     for( int i=start_point; i<plan_.size(); i++ ) {
       double dist = base_local_planner::getGoalPositionDistance(pose, plan_[i].pose.position.x, plan_[i].pose.position.y);
-      //ROS_INFO("pose in nearest_point: %f, %f", pose.getOrigin().x(), pose.getOrigin().y());
-      //ROS_INFO("dist: %f", dist);
       double metric = dist;
-      //ROS_INFO_NAMED("ackermann_planner", "Distance to path: %f", dist);
       if( metric < best_metric && std::find(visited_index.begin(), visited_index.end(), i)==visited_index.end()) {
         best_metric = metric;
         plan_point = i;
@@ -82,7 +53,6 @@ int LocalPlanner::nearestPoint(const int start_point, const tf::Stamped<tf::Pose
       }
     }
     for (int i =0; i<visited_index.size(); i++)
-      //ROS_INFO("visited_index: %d", visited_index[i]);
     return plan_point;
 }
 
@@ -90,7 +60,6 @@ bool LocalPlanner::safety_path(const int next_point, const float yaw){
     float dist = 1.5; 
     float width = 0.5; 
     float safety_angle = atan2(width,dist);
-    //yaw =  yaw + safety_angle;
 }
 
 void LocalPlanner::index_calculation_costmap(unsigned int *c_x,unsigned int *c_y, float yaw){
@@ -140,9 +109,14 @@ void LocalPlanner::index_calculation_costmap(unsigned int *c_x,unsigned int *c_y
   ROS_INFO("LOCAL COSTMAP BRO");
   ROS_INFO("local costmap size: %d, %d",costmap_ros_->getCostmap()->getSizeInCellsX(), costmap_ros_->getCostmap()->getSizeInCellsY());
   ROS_INFO("local costmap resolution: %f",costmap_ros_->getCostmap()->getResolution());
-  ros::NodeHandle private_nh("~/" + name);
+  private_nh = ros::NodeHandle("~/" + name);
   l_plan_pub_ = private_nh.advertise<nav_msgs::Path>("local_plan", 1);
   g_plan_pub_ = private_nh.advertise<nav_msgs::Path>("global_plan", 1);
+  private_nh.setParam("/k1", 0.3);
+  private_nh.setParam("/k1", 0.1);
+  private_nh.setParam("/u1_v", 0.2);
+  private_nh.setParam("/u2_v", 0.2);
+
   ros::NodeHandle nh;
   ros::Subscriber local_costmap = nh.subscribe("/move_base/local_costmap/costmap", 1, local_costmap_callback);
  }
@@ -154,15 +128,9 @@ void LocalPlanner::index_calculation_costmap(unsigned int *c_x,unsigned int *c_y
 
 
   int plan_point = nearestPoint(last_plan_point_, current_pose);
-    //ROS_INFO("pos robot: %f, pos_plan: %f, pos_plan_next: %f", current_pose.getOrigin().x(), plan_[plan_point].pose.position.x,plan_[plan_point+1].pose.position.x);
 
   last_plan_point_ = plan_point;
 
-/*  
-  geometry_msgs::PoseStamped extended_plan = plan_[plan_.size()-1];
-  while(plan_.size()<6){
-    plan_.push_back(extended_plan);
-  }*/
   if (plan_point < plan_.size()){
     int i  = plan_point + 1; 
     geometry_msgs::PoseStamped next_pose = plan_[i];
@@ -188,21 +156,23 @@ void LocalPlanner::index_calculation_costmap(unsigned int *c_x,unsigned int *c_y
     tf::Matrix3x3 m(q);
     double roll, pitch, yaw;
     m.getRPY(roll, pitch, yaw);
-    //ROS_INFO("robot orientation: %f", yaw);
-    
-    
-    
     
     /// INPUT OUTPUT LINEARIZATION
-    float MIN_LIN_VEL = -0.5;
-    float MAX_LIN_VEL = 0.5;
-    float MIN_ANG_VEL = -0.4;
-    float MAX_ANG_VEL = 0.4;
+    float MIN_LIN_VEL = 0.01;
+    float MAX_LIN_VEL = 0.2;
+    float MIN_ANG_VEL = -0.2;
+    float MAX_ANG_VEL = 0.2;
     float b =  0.35;
-    float k1 = 0.5;
-    float k2 = 0.55;
-    float u1 = 0 + k1 * (next_pose.pose.position.x -  current_pose.getOrigin().x());
-    float u2 = 0 + k2 * (next_pose.pose.position.y -  current_pose.getOrigin().y());
+    float k1 = 0.3; 
+    float k2 = 0.15;
+    float u1_v = 0;
+    float u2_v = 0;
+    private_nh.getParam("/k1", k1);
+    private_nh.getParam("/k2", k2);
+    private_nh.getParam("/u1_v", u1_v);
+    private_nh.getParam("/u2_v", u2_v);
+    float u1 =  u1_v + k1 * (next_pose.pose.position.x -  current_pose.getOrigin().x());
+    float u2 =  u2_v+ k2 * (next_pose.pose.position.y -  current_pose.getOrigin().y());
 
 
     ////////activate else branch of the CHECK IF POSITION REACHED AND ROTATE
@@ -256,8 +226,6 @@ void LocalPlanner::index_calculation_costmap(unsigned int *c_x,unsigned int *c_y
 
     old_linear_vel = linear_vel;
 
-
-/*
 
     //// END VFF 
 
@@ -532,6 +500,7 @@ void LocalPlanner::index_calculation_costmap(unsigned int *c_x,unsigned int *c_y
     float robot_pos_x = current_pose.getOrigin().x();
     float robot_pos_y = current_pose.getOrigin().y();
     if (sqrt(pow(robot_pos_x - goal_pos_x,2)+pow(robot_pos_y - goal_pos_y,2))< 0.3){
+      ROS_INFO("position reached");
       position_reached = true; 
       linear_vel = 0;
       angular_vel = 0;
@@ -556,10 +525,10 @@ void LocalPlanner::index_calculation_costmap(unsigned int *c_x,unsigned int *c_y
       }
     }
     else{
-    linear_vel = 0.1;//cos(yaw) * u1 + sin(yaw) * u2;
-    angular_vel = 0.1;//- sin(yaw) / b * u1 + cos(yaw) / b * u2;
+    linear_vel = cos(yaw) * u1 + sin(yaw) * u2;
+    angular_vel = - sin(yaw) / b * u1 + cos(yaw) / b * u2;
 
-    /*
+    
     if (linear_vel > 0)
       linear_vel = min(linear_vel, MAX_LIN_VEL);
     else
@@ -569,41 +538,19 @@ void LocalPlanner::index_calculation_costmap(unsigned int *c_x,unsigned int *c_y
       angular_vel = min(angular_vel, MAX_ANG_VEL);
     else
       angular_vel = max(angular_vel, MIN_ANG_VEL);
-    //ROS_INFO("linear vel: %f    angular vel: %f", linear_vel, angular_vel);
-    */
     }
     
     //// END CHECK POSITION REACHED
-    ROS_INFO("yaw: %f", yaw);
-    ROS_INFO("linear: %f", linear_vel);
-    ROS_INFO("angular: %f", angular_vel);
+    ROS_INFO("linear: %f \t angular: %f", linear_vel, angular_vel);
 
 
 
-    cmd_vel.linear.x = 0.1; 
-    cmd_vel.linear.y = 0.1; 
+    cmd_vel.linear.x = linear_vel; 
+    cmd_vel.linear.y = linear_vel; 
     cmd_vel.linear.z = 0; 
 
     cmd_vel.angular.z = angular_vel; 
-
-      //ROS_INFO("TEMP: %d",  temp_index);
-
-      //ROS_INFO("COSTMAP VALUE: %d",  costmap_ros_->getCostmap()->getCost(c_x,c_y));
-      
-    
-    /*
-    x               x         x
-    (299,299)    (299,150) (299,0)
-
-
-     (0,299)      (0,150)   (0,0)
-    x               x         x  
-    */ 
-
-
   }
-
-  //ROS_INFO("index: %d    x_plan: %f    x_robot: %f",index_to_plan,plan_[index_to_plan].pose.position.x,current_pose.getOrigin().x());
   return valid_velocity;
  }
 
@@ -628,10 +575,10 @@ void LocalPlanner::index_calculation_costmap(unsigned int *c_x,unsigned int *c_y
 
   goal_pos_x = plan_[plan_.size()-1].pose.position.x;
   goal_pos_y = plan_[plan_.size()-1].pose.position.y;
-  //ROS_INFO("LOCAL PLAN SIZE: %d", plan.size());
+  ROS_INFO("LOCAL PLAN SIZE: %d", plan.size());
 
   for (int i = 0; i < plan.size(); i++)
-    //ROS_INFO("x: %f \t y: %f", plan_[i].pose.position.x, plan_[i].pose.position.y);
+    ROS_INFO("x: %f \t y: %f", plan_[i].pose.position.x, plan_[i].pose.position.y);
 
   base_local_planner::publishPlan(plan, g_plan_pub_);
 
@@ -646,20 +593,3 @@ void LocalPlanner::index_calculation_costmap(unsigned int *c_x,unsigned int *c_y
   return true; 
   }
  };
-
-/*NOTE:
- 1. check if the obstacle(small) is placed close in the safty, the value in the border
-
-*/
- /* WHAT TO DO 
- 1. find sector
- 2. create safety function (check if in the path with next point there are obstacles)
- 3. if there is an obstacle give back all the limiter cells where there is no obtacle
- 4. calculate distance of free cells and check if the distance is greater than the safty/ add all the distance of free cell
- 5. choose the bigger 
- 6. calculate the angle and move forward
-
-
-
-
- */
