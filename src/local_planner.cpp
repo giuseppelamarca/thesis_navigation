@@ -152,24 +152,22 @@ void LocalPlanner::index_calculation_costmap(unsigned int *c_x,unsigned int *c_y
   costmap_ros_->getRobotPose(current_pose);
   index_to_plan++;
 
-  ROS_INFO("before nearest point");
+
   int plan_point = nearestPoint(last_plan_point_, current_pose);
     //ROS_INFO("pos robot: %f, pos_plan: %f, pos_plan_next: %f", current_pose.getOrigin().x(), plan_[plan_point].pose.position.x,plan_[plan_point+1].pose.position.x);
-ROS_INFO("after nearest point");
+
   last_plan_point_ = plan_point;
 
-
-  //geometry_msgs::PoseStamped extended_plan = plan_[plan_.size()-1];
-  //while(plan_.size()<6){
-  //  plan_.push_back(extended_plan);
-  //}
-  
-  if (plan_point < plan_.size()-1){
+/*  
+  geometry_msgs::PoseStamped extended_plan = plan_[plan_.size()-1];
+  while(plan_.size()<6){
+    plan_.push_back(extended_plan);
+  }*/
+  if (plan_point < plan_.size()){
     int i  = plan_point + 1; 
     geometry_msgs::PoseStamped next_pose = plan_[i];
 
     std::vector<geometry_msgs::PoseStamped> local_plan;
-    ROS_INFO("before push back local planner");
     for(int i = 0; i< 5; i++){
       geometry_msgs::PoseStamped pose;
       pose.header.frame_id = costmap_ros_->getGlobalFrameID();
@@ -178,14 +176,10 @@ ROS_INFO("after nearest point");
       pose.pose.orientation = tf::createQuaternionMsgFromYaw(0);
       local_plan.push_back(pose);
     }
-    ROS_INFO("after push back local planner");
     base_local_planner::publishPlan(local_plan, l_plan_pub_);  
-    ROS_INFO("after publish local planner");
-
     float linear_vel = 0.0;
     float angular_vel = 0.0;
 
-    ROS_INFO("before orientation");
     tf::Quaternion q(
         current_pose.getRotation().x(),
         current_pose.getRotation().y(),
@@ -195,22 +189,20 @@ ROS_INFO("after nearest point");
     double roll, pitch, yaw;
     m.getRPY(roll, pitch, yaw);
     //ROS_INFO("robot orientation: %f", yaw);
-    ROS_INFO("after orientation");
     
     
     
     
     /// INPUT OUTPUT LINEARIZATION
-    float MIN_LIN_VEL = -0.0;
-    float MAX_LIN_VEL = 0.3;
-    float MIN_ANG_VEL = -0.2;
-    float MAX_ANG_VEL = 0.2;
-    float b =  0.2;//0.35;
-    float k1 = 2.5;
-    float k2 = 1;
-    float u1 = 0.1 + k1 * (next_pose.pose.position.x -  current_pose.getOrigin().x());
-    float u2 = 0.1 + k2 * (next_pose.pose.position.y -  current_pose.getOrigin().y());
-    ROS_INFO("after u choose");
+    float MIN_LIN_VEL = -0.5;
+    float MAX_LIN_VEL = 0.5;
+    float MIN_ANG_VEL = -0.4;
+    float MAX_ANG_VEL = 0.4;
+    float b =  0.35;
+    float k1 = 0.5;
+    float k2 = 0.55;
+    float u1 = 0 + k1 * (next_pose.pose.position.x -  current_pose.getOrigin().x());
+    float u2 = 0 + k2 * (next_pose.pose.position.y -  current_pose.getOrigin().y());
 
 
     ////////activate else branch of the CHECK IF POSITION REACHED AND ROTATE
@@ -220,7 +212,7 @@ ROS_INFO("after nearest point");
 
 
     //// VFF METHOD  
-/*
+    /*
     float Fr = 0.03;
     float Ft = 0.15; 
     float FR[2] = {0,0};
@@ -265,12 +257,12 @@ ROS_INFO("after nearest point");
     old_linear_vel = linear_vel;
 
 
-
+/*
 
     //// END VFF 
 
     ///// VFH METHOD
-/*
+
     if (plan_.size()<5){
       position_reached = true;
     }
@@ -286,7 +278,7 @@ ROS_INFO("after nearest point");
     float alpha = 5; 
     int n = 72;
     float b1 = 0.001;
-    float a1 = b1*sqrt(2)*1.5;
+    float a1 = b1*sqrt(2)*2.5;
     
     int sector = 0; 
     int threshold = 50000; 
@@ -294,7 +286,6 @@ ROS_INFO("after nearest point");
     bool front = true; 
 
     float target_angle_temp = atan2(next_pose.pose.position.y -  current_pose.getOrigin().y(),next_pose.pose.position.x -  current_pose.getOrigin().x());
-    
     if (target_angle_temp<= 0.7853981634   && target_angle_temp >= -0.7853981634)
       sector = 1; 
     else if (target_angle_temp<= 2.3561944902   && target_angle_temp > 0.7853981634)
@@ -381,36 +372,7 @@ ROS_INFO("after nearest point");
         //ROS_INFO("h %d: %f", h_index[l],h[l]);
       }
     }
-    else if (sector ==4){
-      float B1[costmap_size/2][costmap_size];
-      float m1[costmap_size/2][costmap_size];
-      //i  da 0 a 150 
-      //j da 0 a 299
-      for (int l = 0; l< n; l++){
-        h_index.push_back(l*alpha);
-        h.push_back(0);
-        
-        for (int i = 0; i< costmap_size/2;i++){
-            for(int j = 0; j< costmap_size; j++){
-              int cell_cost = costmap_ros_->getCostmap()->getCost(i,j);
-              float x_dist = (i-costmap_size/2)*costmap_ros_->getCostmap()->getResolution();
-              float y_dist = (j-costmap_size/2)*costmap_ros_->getCostmap()->getResolution();
-              B1[i][j]=atan2(y_dist, x_dist);
-              //ROS_INFO("B: %f", B1[i-150][j] );
-              m1[i][j]=cell_cost*cell_cost * (a1-b1*sqrt(x_dist*x_dist+y_dist*y_dist));
-              if(alpha*int((B1[i][j]+1.5707963268)/alpha/0.0174532925)==h_index[l])
-                h[l]+=m1[i][j];
-            }
-        }
-
-        //ROS_INFO("h %d: %f", h_index[l],h[l]);
-        
-      }   
-    }
     float target_angle = (atan2(next_pose.pose.position.y -  current_pose.getOrigin().y(),next_pose.pose.position.x -  current_pose.getOrigin().x())+1.5707963268)/0.0174532925;
-    ///bug between 270 and 360 deg
-    if (target_angle < 0)
-      target_angle = 360 + target_angle;
     int min_angle = 5000000;
     int close_angle = 0;
     int l=5;
@@ -418,7 +380,7 @@ ROS_INFO("after nearest point");
     k.push_back(h[0]);k.push_back(h[1]);k.push_back(h[2]);k.push_back(h[3]);k.push_back(h[4]);
     for (int i = l; i<n-l ; i++){
       k.push_back((h[i-l]+2*h[i-l+1]+3*h[i-l+2]+4*h[i-l+3]+5*h[i-l+4]+6*h[i]+5*h[i+l-4]+4*h[i+l-3]+3*h[i+l-2]+2*h[i+l-1]+h[i+l])/(2*l+1));
-      //ROS_INFO("h %d: %f", h_index[i],k[i]);
+      ROS_INFO("h %d: %f", h_index[i],k[i]);
     }
     k.push_back(h[h.size()-5]);k.push_back(h[h.size()-4]);k.push_back(h[h.size()-3]);k.push_back(h[h.size()-2]);k.push_back(h[h.size()-1]);
     for (int l = 0; l< n; l++){
@@ -436,7 +398,7 @@ ROS_INFO("after nearest point");
     int cnt = 0;
     vector<int> valley_center;
     for (int l=0; l<h_free.size();l++){
-            ROS_INFO("h_free: %d    %f",h_free[l], h[l]);
+            ROS_INFO("h_free: %d",h_free[l]);
     }
 
     if (sector == 1){
@@ -486,9 +448,8 @@ ROS_INFO("after nearest point");
       for (int l = 0; l< h_free.size(); l++){
         if (h_free[l]<90){
           start_condition = l;
-        }
-        else
           break;
+        }
       }
       for (int l = 0; l< h_free.size(); l++){
         if (h_free[l]>270){
@@ -496,57 +457,27 @@ ROS_INFO("after nearest point");
           break;
         }
       }
-      //h_free.erase(h_free.begin(), h_free.end());
+      h_free.erase(h_free.begin(), h_free.end());
       for (int l=start_condition; l>=0; l--){
         h_free_temp.push_back(h_free[l]);
       }
       for (int l=h_free.size()-1; l>=end_condition; l--){
-        h_free_temp.push_back(h_free[l]-360);
+        h_free_temp.push_back(h_free[l]);
       }
 
       h_free = h_free_temp;
-      for (int l=0; l< h_free.size(); l++)
-        ROS_INFO("h_free_temp: %d", h_free[l]);
-
-
       for (int l = 1; l< h_free.size(); l++){
-        if(h_free[l-1]-alpha == h_free[l]){
-          cnt++;
-        }
-        else{
-          if (h_free[l-1-cnt/2]>= 0)
-            valley_center.push_back(h_free[l-1-cnt/2]);
-          else
-            valley_center.push_back(h_free[l-1-cnt/2]+360);
-          //ROS_INFO("cnt: %d", cnt);
-          cnt = 0;
-        }
-        if (h_free[l]==85){
-          if (h_free[l-1-cnt/2] >= 0)
-            valley_center.push_back(h_free[l-1-cnt/2]);
-          else
-            valley_center.push_back(h_free[l-1-cnt/2]+360);
-          cnt = 0;
-        }
-        if (h_free[l] == -85){
-          if (h_free[l-1-cnt/2] >= 0)
-            valley_center.push_back(h_free[l-1-cnt/2]);
-          else
-            valley_center.push_back(h_free[l-1-cnt/2]+360);
-          //ROS_INFO("cnt: %d", cnt);
-          cnt = 0;
-          break;        
-        }
-      }
-    }
-    else if (sector==4){
-      for (int l = 1; l< h_free.size(); l++){
-        if ( h_free[l]<180)    //ignore all free angle of the first and second sector
+        if ( h_free[l]>90 && h_free[l]<270)    //ignore all free angle of the first sector
           continue;
         if(h_free[l-1]+alpha == h_free[l]){
           cnt++;
         }
         else{
+          valley_center.push_back(h_free[l-1-cnt/2]);
+          //ROS_INFO("cnt: %d", cnt);
+          cnt = 0;
+        }
+        if (h_free[l]==90){
           valley_center.push_back(h_free[l-1-cnt/2]);
           //ROS_INFO("cnt: %d", cnt);
           cnt = 0;
@@ -578,40 +509,33 @@ ROS_INFO("after nearest point");
     float T = 0.1;
     float tau = 0.4;
     float delta = 0;
-    // -90 to compensate the different orientation between the localization system(robot orientation) and start of local costmap. 
     if (sector==1 || sector == 2)
       delta = (close_angle - 90)* 0.0174532925;
     else
       delta = (close_angle - 90)* 0.0174532925;
     //float new_delta = (T * delta + (tau - T) * old_delta)/tau;
-
-    if (delta > 3.14159)
-      delta = delta -  6.2831853072;
     float new_delta = delta;
     old_delta = delta;
     angular_vel = -yaw + new_delta;
     ROS_INFO("new_delta: %f", angular_vel);
 
-    float h_param = 45000;
+    float h_param = 80000;
     linear_vel = 0.3*(1-(float)std::min(h_c, h_param)/h_param);
     ROS_INFO("h_c: %f", h_c);
     ROS_INFO("linear vel: %f", linear_vel);
     ///// END VFH METHOD
-    
-
-*/
 
 
-    ROS_INFO("before check robot reached position");
+  */
+
     /// CHECK IF POSITION REACHED AND ROTATE
     float robot_pos_x = current_pose.getOrigin().x();
     float robot_pos_y = current_pose.getOrigin().y();
-    if (sqrt(pow(robot_pos_x - goal_pos_x,2)+pow(robot_pos_y - goal_pos_y,2))< 0.2){
+    if (sqrt(pow(robot_pos_x - goal_pos_x,2)+pow(robot_pos_y - goal_pos_y,2))< 0.3){
       position_reached = true; 
       linear_vel = 0;
       angular_vel = 0;
     }
-    ROS_INFO("after check robot reached position");
     //The robot is in the goal position and need just to rotate to allineate with the goal orientation
     if (position_reached){
       tf::Quaternion quat_goal(
@@ -623,7 +547,7 @@ ROS_INFO("after nearest point");
       double roll_goal, pitch_goal, yaw_goal;
       m_goal.getRPY(roll_goal, pitch_goal, yaw_goal);
       linear_vel = 0;
-      double P = 0.05;
+      double P = 0.5;
       angular_vel = P * (yaw_goal - yaw);
       if (abs(angular_vel) < 0.05){
         ROS_INFO("angular velocity: %f", angular_vel);
@@ -632,12 +556,10 @@ ROS_INFO("after nearest point");
       }
     }
     else{
-    ROS_INFO("before bug");
-    linear_vel = cos(yaw) * u1 + sin(yaw) * u2;
-    angular_vel = - sin(yaw) / b * u1 + cos(yaw) / b * u2;
+    linear_vel = 0.1;//cos(yaw) * u1 + sin(yaw) * u2;
+    angular_vel = 0.1;//- sin(yaw) / b * u1 + cos(yaw) / b * u2;
 
-    ROS_INFO("before LINEAR VEL: %f    ANGULAR VEL: %f", linear_vel, angular_vel);
-    
+    /*
     if (linear_vel > 0)
       linear_vel = min(linear_vel, MAX_LIN_VEL);
     else
@@ -648,17 +570,18 @@ ROS_INFO("after nearest point");
     else
       angular_vel = max(angular_vel, MIN_ANG_VEL);
     //ROS_INFO("linear vel: %f    angular vel: %f", linear_vel, angular_vel);
-    
+    */
     }
     
     //// END CHECK POSITION REACHED
-    //ROS_INFO("yaw: %f", yaw);
-    ROS_INFO("after LINEAR VEL: %f    ANGULAR VEL: %f", linear_vel, angular_vel);
+    ROS_INFO("yaw: %f", yaw);
+    ROS_INFO("linear: %f", linear_vel);
+    ROS_INFO("angular: %f", angular_vel);
 
 
 
-    cmd_vel.linear.x = linear_vel; 
-    cmd_vel.linear.y = linear_vel; 
+    cmd_vel.linear.x = 0.1; 
+    cmd_vel.linear.y = 0.1; 
     cmd_vel.linear.z = 0; 
 
     cmd_vel.angular.z = angular_vel; 
