@@ -46,9 +46,6 @@ void local_costmap_callback(const nav_msgs::OccupancyGrid &costmap);
 
     Eigen::MatrixXd local_costmap_matrixI = Eigen::MatrixXd(300,300);
     Eigen::MatrixXd local_costmap_matrixJ = Eigen::MatrixXd(300,300);
-
-    //Eigen::MatrixXd local_costmap_matrixI = Eigen::MatrixXd(300,300);
-    //Eigen::MatrixXd local_costmap_matrixJ = Eigen::MatrixXd(300,300);
     Eigen::MatrixXd rotation_matrix = Eigen::MatrixXd(300,300);
 
 

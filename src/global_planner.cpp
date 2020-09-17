@@ -52,7 +52,6 @@ float res=0.0;
  }
 
  bool GlobalPlanner::makePlan(const geometry_msgs::PoseStamped& start, const geometry_msgs::PoseStamped& goal,  std::vector<geometry_msgs::PoseStamped>& plan ){
-  //ROS_INFO("goal: %f,%f", goal.pose.position.x,goal.pose.position.y);
   int cell_goal_x = (goal.pose.position.x+100)/res;
   int cell_goal_y = (goal.pose.position.y+100)/res;
   int cell_start_x = (start.pose.position.x+100)/res;
@@ -86,9 +85,6 @@ float res=0.0;
  for (int i = -step ; i< step; i++)
   for (int j = -step ; j< step; j++)
     ball_start.push_back(Point(cell_start_x + i, cell_start_y + j)); 
-
-  //ROS_INFO("ball_start size: %d", ball_start.size());
-
 
   vector<Point> index;
   int cell_value = 0;
@@ -153,10 +149,6 @@ float res=0.0;
 
     i++;
   }
-
-  //ROS_INFO("goal cell: %d , %d", cell_goal_x,cell_goal_y);
-  //ROS_INFO("start cell: %d , %d", cell_start_x,cell_start_y);
-
   
   for (int i = 0; i < index_path.size(); i++){
     //ROS_INFO("x: %d \t y: %d", index_path[i].x, index_path[i].y);
