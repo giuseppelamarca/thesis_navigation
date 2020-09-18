@@ -156,6 +156,14 @@ void LocalPlanner::index_calculation_costmap(unsigned int *c_x,unsigned int *c_y
     tf::Matrix3x3 m(q);
     double roll, pitch, yaw;
     m.getRPY(roll, pitch, yaw);
+
+    // INITIAL ROTATION TO NEXT POSE ALLIGNMENT
+    float next_point_angle = atan2(next_pose.pose.position.y -  current_pose.getOrigin().y(),next_pose.pose.position.x -  current_pose.getOrigin().x());
+
+    if (abs(yaw-next_point_angle)>1){
+      initial_allignment = true;
+      ROS_INFO("allignment.....");
+    }
     
     /// INPUT OUTPUT LINEARIZATION
     float MIN_LIN_VEL = 0.01;
@@ -174,344 +182,33 @@ void LocalPlanner::index_calculation_costmap(unsigned int *c_x,unsigned int *c_y
     float u1 =  u1_v + k1 * (next_pose.pose.position.x -  current_pose.getOrigin().x());
     float u2 =  u2_v+ k2 * (next_pose.pose.position.y -  current_pose.getOrigin().y());
 
-
-    ////////activate else branch of the CHECK IF POSITION REACHED AND ROTATE
     /// END  INPUT OUTPUT LINEARIZATION
-
-
-
-
-    //// VFF METHOD  
-    /*
-    float Fr = 0.03;
-    float Ft = 0.15; 
-    float FR[2] = {0,0};
-    float FR_damp[2] = {0,0};    
-    float FT[2] = {0,0};
-    float R[2] = {0,0};
-    float T = 0.1;
-    float tau = 0.3;
-    int robot_cell = cell_x_size/2;
-    for (int i = 0; i < cell_x_size; i++){
-      for (int j = 0; j < cell_y_size; j++){
-        if (i == robot_cell && j == robot_cell)
-          continue;
-        float d = sqrt((robot_cell - i)*(robot_cell - i) + (robot_cell - j)*(robot_cell - j) ); 
-        float temp = (Fr * costmap_ros_->getCostmap()->getCost(i,j) ) / (d * d); 
-        FR[0] += temp * ( i - robot_cell) * 0.01 /d ;
-        FR[1] += temp * ( j - robot_cell) * 0.01 /d ;
-      }
-    }
-    float w = 0.25;
-    FR[0] = -FR[0];
-    FR[1] = -FR[1];
-    float cos_teta = (old_linear_vel*cos(yaw) * FR[0] + old_linear_vel*sin(yaw) * FR[1])/(old_linear_vel*(sqrt(FR[0]*FR[0]+FR[1]*FR[1])+0.001));
-    FR_damp[0] = w * FR[0] + (1 - w) * FR[0] * (-cos_teta);
-    FR_damp[1] = w * FR[1] + (1 - w) * FR[1] * (-cos_teta);
-    float x_dist = next_pose.pose.position.x -  current_pose.getOrigin().x();
-    float y_dist = next_pose.pose.position.y -  current_pose.getOrigin().y();
-    float target_dist = sqrt(x_dist * x_dist + y_dist * y_dist);
-    FT[0] =  Ft * x_dist / target_dist; 
-    FT[1] =  Ft * y_dist / target_dist;
-    R[0] = FR_damp[0] + FT[0];
-    R[1] = FR_damp[1] + FT[1];
-    float delta = atan2(R[1],R[0]);
-    float new_delta = (T * delta + (tau - T) * old_delta)/tau;
-    old_delta = delta;
-    angular_vel = 1.5 * (new_delta - yaw);
-    //ROS_INFO("cos teta: %f", cos_teta);
-
-    linear_vel = 0.5*(1-abs(cos_teta));
-        ROS_INFO("angular vel: %f linear vel: %f", angular_vel, linear_vel);
-
-    old_linear_vel = linear_vel;
-
-
-    //// END VFF 
-
-    ///// VFH METHOD
-
-    if (plan_.size()<5){
-      position_reached = true;
-    }
-    int costmap_size = costmap_ros_->getCostmap()->getSizeInCellsX();
-
-    
-    //float B1[costmap_size/2][costmap_size];
-    //float m1[costmap_size/2][costmap_size];
-    
-    vector<float> h; 
-    vector<int> h_index;
-    vector<int> h_free;
-    float alpha = 5; 
-    int n = 72;
-    float b1 = 0.001;
-    float a1 = b1*sqrt(2)*2.5;
-    
-    int sector = 0; 
-    int threshold = 50000; 
-
-    bool front = true; 
-
-    float target_angle_temp = atan2(next_pose.pose.position.y -  current_pose.getOrigin().y(),next_pose.pose.position.x -  current_pose.getOrigin().x());
-    if (target_angle_temp<= 0.7853981634   && target_angle_temp >= -0.7853981634)
-      sector = 1; 
-    else if (target_angle_temp<= 2.3561944902   && target_angle_temp > 0.7853981634)
-      sector = 2;
-    else if (target_angle_temp< -0.7853981634   && target_angle_temp >=-2.3561944902 )
-      sector = 3;
-    else
-      sector = 4;
-    
-    ROS_INFO("SECTOR: %d    TARGET ANGLE: %f", sector, target_angle_temp);
-    if (sector ==1){
-      float B1[costmap_size/2][costmap_size];
-      float m1[costmap_size/2][costmap_size];
-      //i  da 150 a 299 
-      //j da 0 a 299
-      for (int l = 0; l< n; l++){
-        h_index.push_back(l*alpha);
-        h.push_back(0);
-        
-        for (int i = costmap_size/2; i< costmap_size;i++){
-            for(int j = 0; j< costmap_size; j++){
-              int cell_cost = costmap_ros_->getCostmap()->getCost(i,j);
-              float x_dist = (i-costmap_size/2)*costmap_ros_->getCostmap()->getResolution();
-              float y_dist = (j-costmap_size/2)*costmap_ros_->getCostmap()->getResolution();
-              B1[i-costmap_size/2][j]=atan2(y_dist, x_dist);
-              //ROS_INFO("B: %f", B1[i-150][j] );
-              m1[i-costmap_size/2][j]=cell_cost*cell_cost * (a1-b1*sqrt(x_dist*x_dist+y_dist*y_dist));
-              if(alpha*int((B1[i-costmap_size/2][j]+1.5707963268)/alpha/0.0174532925)==h_index[l])
-                h[l]+=m1[i-costmap_size/2][j];
-            }
-        }
-
-        //ROS_INFO("h %d: %f", h_index[l],h[l]);
-        
-      }   
-    }
-    else if (sector == 2){
-      float B1[costmap_size][costmap_size/2];
-      float m1[costmap_size][costmap_size/2];
-
-      //i da 0 a 299
-      //j da 150 a 299
-      ROS_INFO("SONO NELL'ELSE");
-      front = false;
-      for (int l = 0; l< n; l++){
-        h_index.push_back(l*alpha);
-        h.push_back(0);
-        for (int i = 0; i< costmap_size;i++){
-            for(int j = costmap_size/2; j< costmap_size; j++){
-              int cell_cost = costmap_ros_->getCostmap()->getCost(i,j);
-              float x_dist = (i-costmap_size/2)*costmap_ros_->getCostmap()->getResolution();
-              float y_dist = (j-costmap_size/2)*costmap_ros_->getCostmap()->getResolution();
-              B1[i][j - costmap_size/2]=atan2(y_dist, x_dist);
-              m1[i][j - costmap_size/2]=cell_cost*cell_cost * (a1-b1*sqrt(x_dist*x_dist+y_dist*y_dist));
-              if(alpha*int((B1[i][j - costmap_size/2]+1.5707963268)/alpha/0.0174532925)==h_index[l])
-                h[l]+=m1[i][j - costmap_size/2];
-            }
-        }
-        //ROS_INFO("h %d: %f", h_index[l],h[l]);
-      }
-    }
-    else if (sector == 3){
-      float B1[costmap_size][costmap_size/2];
-      float m1[costmap_size][costmap_size/2];
-
-      //i da 0 a 299
-      //j da 0 a 150
-      ROS_INFO("SONO NELL'ELSE");
-      front = false;
-      for (int l = 0; l< n; l++){
-        h_index.push_back(l*alpha);
-        h.push_back(0);
-        for (int i = 0; i< costmap_size;i++){
-            for(int j = 0; j< costmap_size/2; j++){
-              int cell_cost = costmap_ros_->getCostmap()->getCost(i,j);
-              float x_dist = (i-costmap_size/2)*costmap_ros_->getCostmap()->getResolution();
-              float y_dist = (j-costmap_size/2)*costmap_ros_->getCostmap()->getResolution();
-              B1[i][j]=atan2(y_dist, x_dist);
-              m1[i][j]=cell_cost*cell_cost * (a1-b1*sqrt(x_dist*x_dist+y_dist*y_dist));
-              if(alpha*int((B1[i][j]+1.5707963268)/alpha/0.0174532925)==h_index[l])
-                h[l]+=m1[i][j];
-            }
-        }
-        //ROS_INFO("h %d: %f", h_index[l],h[l]);
-      }
-    }
-    float target_angle = (atan2(next_pose.pose.position.y -  current_pose.getOrigin().y(),next_pose.pose.position.x -  current_pose.getOrigin().x())+1.5707963268)/0.0174532925;
-    int min_angle = 5000000;
-    int close_angle = 0;
-    int l=5;
-    vector<float> k;
-    k.push_back(h[0]);k.push_back(h[1]);k.push_back(h[2]);k.push_back(h[3]);k.push_back(h[4]);
-    for (int i = l; i<n-l ; i++){
-      k.push_back((h[i-l]+2*h[i-l+1]+3*h[i-l+2]+4*h[i-l+3]+5*h[i-l+4]+6*h[i]+5*h[i+l-4]+4*h[i+l-3]+3*h[i+l-2]+2*h[i+l-1]+h[i+l])/(2*l+1));
-      ROS_INFO("h %d: %f", h_index[i],k[i]);
-    }
-    k.push_back(h[h.size()-5]);k.push_back(h[h.size()-4]);k.push_back(h[h.size()-3]);k.push_back(h[h.size()-2]);k.push_back(h[h.size()-1]);
-    for (int l = 0; l< n; l++){
-            //ROS_INFO("h %d: %f", h_index[l],h[l]);
-
-      if (k[l] < threshold){
-        //ROS_INFO("h[l]: %f   <  %d    h_free: %d", h[l], threshold, h_index[l]);
-        h_free.push_back(h_index[l]);
-      }
-    }
-
-
-
-    //FIND CENTER OF VALLEY
-    int cnt = 0;
-    vector<int> valley_center;
-    for (int l=0; l<h_free.size();l++){
-            ROS_INFO("h_free: %d",h_free[l]);
-    }
-
-    if (sector == 1){
-      for (int l = 1; l< h_free.size(); l++){
-        if(h_free[l-1]+alpha == h_free[l]){
-          cnt++;
-        ROS_INFO("cnt: %d", cnt);
-        }
-        else{
-          valley_center.push_back(h_free[l-1-cnt/2]);
-          //ROS_INFO("cnt: %d", cnt);
-          cnt = 0;
-        }
-        if (h_free[l] >= 180){
-          valley_center.push_back(h_free[l-1-cnt/2]);
-          //ROS_INFO("cnt: %d", cnt);
-          cnt = 0;
-          break;        
-        }
-      }
-    }
-
-    else if (sector==2){
-      for (int l = 1; l< h_free.size(); l++){
-        if ( h_free[l]<90)    //ignore all free angle of the first sector
-          continue;
-        if(h_free[l-1]+alpha == h_free[l]){
-          cnt++;
-        }
-        else{
-          valley_center.push_back(h_free[l-1-cnt/2]);
-          //ROS_INFO("cnt: %d", cnt);
-          cnt = 0;
-        }
-        if (h_free[l] == 270){
-          valley_center.push_back(h_free[l-1-cnt/2]);
-          //ROS_INFO("cnt: %d", cnt);
-          cnt = 0;
-          break;        
-        }
-      }
-    }
-    else if (sector==3){
-      int start_condition = 0;
-      int end_condition = 0; 
-      vector<int> h_free_temp;
-      for (int l = 0; l< h_free.size(); l++){
-        if (h_free[l]<90){
-          start_condition = l;
-          break;
-        }
-      }
-      for (int l = 0; l< h_free.size(); l++){
-        if (h_free[l]>270){
-          end_condition = l;
-          break;
-        }
-      }
-      h_free.erase(h_free.begin(), h_free.end());
-      for (int l=start_condition; l>=0; l--){
-        h_free_temp.push_back(h_free[l]);
-      }
-      for (int l=h_free.size()-1; l>=end_condition; l--){
-        h_free_temp.push_back(h_free[l]);
-      }
-
-      h_free = h_free_temp;
-      for (int l = 1; l< h_free.size(); l++){
-        if ( h_free[l]>90 && h_free[l]<270)    //ignore all free angle of the first sector
-          continue;
-        if(h_free[l-1]+alpha == h_free[l]){
-          cnt++;
-        }
-        else{
-          valley_center.push_back(h_free[l-1-cnt/2]);
-          //ROS_INFO("cnt: %d", cnt);
-          cnt = 0;
-        }
-        if (h_free[l]==90){
-          valley_center.push_back(h_free[l-1-cnt/2]);
-          //ROS_INFO("cnt: %d", cnt);
-          cnt = 0;
-        }
-        if (h_free[l] == 355){
-          valley_center.push_back(h_free[l-1-cnt/2]);
-          //ROS_INFO("cnt: %d", cnt);
-          cnt = 0;
-          break;        
-        }
-      }
-    }
-
-
-    float h_c = 0; 
-
-    ROS_INFO("sector: %d", sector);
-    for (int l = 0; l< valley_center.size(); l++){
-      ROS_INFO("center: %d", valley_center[l]);
-      if(abs(target_angle-valley_center[l])< min_angle){
-        close_angle = valley_center[l];
-        h_c = h[valley_center[l]];
-        min_angle = abs(target_angle-valley_center[l]);
-      }
-    }
-    ROS_INFO("target: %f  close: %d  yaw: %f", target_angle,  close_angle, yaw);
-
-
-    float T = 0.1;
-    float tau = 0.4;
-    float delta = 0;
-    if (sector==1 || sector == 2)
-      delta = (close_angle - 90)* 0.0174532925;
-    else
-      delta = (close_angle - 90)* 0.0174532925;
-    //float new_delta = (T * delta + (tau - T) * old_delta)/tau;
-    float new_delta = delta;
-    old_delta = delta;
-    angular_vel = -yaw + new_delta;
-    ROS_INFO("new_delta: %f", angular_vel);
-
-    float h_param = 80000;
-    linear_vel = 0.3*(1-(float)std::min(h_c, h_param)/h_param);
-    ROS_INFO("h_c: %f", h_c);
-    ROS_INFO("linear vel: %f", linear_vel);
-    ///// END VFH METHOD
-
-
-  */
 
     /// CHECK IF POSITION REACHED AND ROTATE
     float robot_pos_x = current_pose.getOrigin().x();
     float robot_pos_y = current_pose.getOrigin().y();
-    if (sqrt(pow(robot_pos_x - goal_pos_x,2)+pow(robot_pos_y - goal_pos_y,2))< 0.3){
+    if (sqrt(pow(robot_pos_x - goal_pos_x,2)+pow(robot_pos_y - goal_pos_y,2))< 0.2){
       ROS_INFO("position reached");
       position_reached = true; 
       linear_vel = 0;
       angular_vel = 0;
     }
     //The robot is in the goal position and need just to rotate to allineate with the goal orientation
-    if (position_reached){
-      tf::Quaternion quat_goal(
-        plan_[plan_.size()-1].pose.orientation.x,
-        plan_[plan_.size()-1].pose.orientation.y,
-        plan_[plan_.size()-1].pose.orientation.z,
-        plan_[plan_.size()-1].pose.orientation.w);
+    if (position_reached || initial_allignment){
+      if(position_reached){
+        tf::Quaternion quat_goal(
+          plan_[plan_.size()-1].pose.orientation.x,
+          plan_[plan_.size()-1].pose.orientation.y,
+          plan_[plan_.size()-1].pose.orientation.z,
+          plan_[plan_.size()-1].pose.orientation.w);
+      }
+      else{
+        tf::Quaternion quat_goal(
+          plan_[i].pose.orientation.x,
+          plan_[i].pose.orientation.y,
+          plan_[i].pose.orientation.z,
+          plan_[i].pose.orientation.w);
+      }
       tf::Matrix3x3 m_goal(quat_goal);
       double roll_goal, pitch_goal, yaw_goal;
       m_goal.getRPY(roll_goal, pitch_goal, yaw_goal);
@@ -521,6 +218,7 @@ void LocalPlanner::index_calculation_costmap(unsigned int *c_x,unsigned int *c_y
       if (abs(angular_vel) < 0.05){
         ROS_INFO("angular velocity: %f", angular_vel);
         position_reached = false; 
+        initial_allignment = false;
         goal_reached = true;
       }
     }

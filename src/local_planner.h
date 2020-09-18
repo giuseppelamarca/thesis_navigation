@@ -28,6 +28,8 @@ void local_costmap_callback(const nav_msgs::OccupancyGrid &costmap);
  class LocalPlanner : public nav_core::BaseLocalPlanner {
      bool goal_reached = false; 
      bool position_reached = false; 
+     bool initial_allignment = false;
+
      bool valid_velocity = true;
      bool correct_plan = true; 
      bool start_rotation = false;
