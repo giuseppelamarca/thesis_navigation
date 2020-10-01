@@ -319,3 +319,5 @@ void LocalPlanner::index_calculation_costmap(unsigned int *c_x,unsigned int *c_y
   return true; 
   }
  };
+
+ //ultima modifica
