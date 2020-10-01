@@ -114,8 +114,8 @@ void LocalPlanner::index_calculation_costmap(unsigned int *c_x,unsigned int *c_y
   g_plan_pub_ = private_nh.advertise<nav_msgs::Path>("global_plan", 1);
   private_nh.setParam("/k1", 0.3);
   private_nh.setParam("/k1", 0.1);
-  private_nh.setParam("/u1_v", 0.2);
-  private_nh.setParam("/u2_v", 0.2);
+  private_nh.setParam("/u1_v", 0.0);
+  private_nh.setParam("/u2_v", 0.0);
 
   ros::NodeHandle nh;
   ros::Subscriber local_costmap = nh.subscribe("/move_base/local_costmap/costmap", 1, local_costmap_callback);
@@ -194,16 +194,18 @@ void LocalPlanner::index_calculation_costmap(unsigned int *c_x,unsigned int *c_y
       angular_vel = 0;
     }
     //The robot is in the goal position and need just to rotate to allineate with the goal orientation
-    if (position_reached || initial_allignment){
+    if (position_reached){//} || initial_allignment){
+      tf::Quaternion quat_goal;
       if(position_reached){
-        tf::Quaternion quat_goal(
+        quat_goal = tf::Quaternion(
           plan_[plan_.size()-1].pose.orientation.x,
           plan_[plan_.size()-1].pose.orientation.y,
           plan_[plan_.size()-1].pose.orientation.z,
           plan_[plan_.size()-1].pose.orientation.w);
       }
       else{
-        tf::Quaternion quat_goal(
+        ROS_INFO("initial rotation");
+        quat_goal = tf::Quaternion(
           plan_[i].pose.orientation.x,
           plan_[i].pose.orientation.y,
           plan_[i].pose.orientation.z,
@@ -213,12 +215,36 @@ void LocalPlanner::index_calculation_costmap(unsigned int *c_x,unsigned int *c_y
       double roll_goal, pitch_goal, yaw_goal;
       m_goal.getRPY(roll_goal, pitch_goal, yaw_goal);
       linear_vel = 0;
-      double P = 0.5;
-      angular_vel = P * (yaw_goal - yaw);
+      double P = 0.25;//0.5;
+      /*
+      if(yaw_goal > 0){
+        if ((yaw_goal - yaw)<3.1415){
+          angular_vel = - P * (yaw_goal - yaw);
+        }
+        else{
+          angular_vel = P * (yaw_goal - yaw);
+        }
+      }
+      else{
+         if ((yaw_goal - yaw)< -3.1415){
+          angular_vel =  P * (yaw_goal - yaw);
+        }
+        else{
+          angular_vel =  - P * (yaw_goal - yaw);
+        }
+      }*/
+      if (position_reached)
+        angular_vel = P * (yaw_goal - yaw);
+      else
+      {
+        angular_vel = P * (next_point_angle - yaw);
+      }
+      
       if (abs(angular_vel) < 0.05){
         ROS_INFO("angular velocity: %f", angular_vel);
         position_reached = false; 
-        initial_allignment = false;
+        //initial_allignment = true;
+        //if (!initial_allignment) goal_reached = true;
         goal_reached = true;
       }
     }
@@ -239,6 +265,7 @@ void LocalPlanner::index_calculation_costmap(unsigned int *c_x,unsigned int *c_y
     }
     
     //// END CHECK POSITION REACHED
+    ROS_INFO("u1: %f  \t u2: %f \t yaw: %f", u1, u2, yaw);
     ROS_INFO("linear: %f \t angular: %f", linear_vel, angular_vel);
 
 
@@ -261,6 +288,7 @@ void LocalPlanner::index_calculation_costmap(unsigned int *c_x,unsigned int *c_y
 
  bool LocalPlanner::setPlan (const std::vector<geometry_msgs::PoseStamped>& plan){
   goal_reached = false;
+  initial_allignment = false;
   plan_ = plan;
   last_plan_point_ = 0;
   visited_index.clear();

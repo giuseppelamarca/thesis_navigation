@@ -113,6 +113,7 @@ float res=0.0;
     if (std::find(ball_start.begin(), ball_start.end(),Point(index[i].x, index[i].y))!=ball_start.end())
       break;
     i++;
+    ROS_INFO("I: %d",i);
   }
   
   //
