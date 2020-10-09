@@ -33,32 +33,6 @@ void local_costmap_callback(const nav_msgs::OccupancyGrid &costmap){
  //Default Constructor
  namespace local_planner {
 
-/*
- int LocalPlanner::nearestPoint(const int start_point, const tf::Stamped<tf::Pose> & pose) {
-    int plan_point = start_point;
-    double best_metric = std::numeric_limits<double>::max();
-    //// ACTIVATING THIS PIECE OF CODE FORCE THE ROBOT TO PASS AS CLOSE AS POSSIBLE TO THE GLOBAL PLAN ///
-    double start_dist = base_local_planner::getGoalPositionDistance(pose, plan_[start_point].pose.position.x, plan_[start_point].pose.position.y);
-    if (start_dist>0.3)
-      return start_point;
-    //// END ACTIVATION ///
-    for( int i=start_point; i<plan_.size(); i++ ) {
-      double dist = base_local_planner::getGoalPositionDistance(pose, plan_[i].pose.position.x, plan_[i].pose.position.y);
-      //ROS_INFO("pose in nearest_point: %f, %f", pose.getOrigin().x(), pose.getOrigin().y());
-      //ROS_INFO("dist: %f", dist);
-      double metric = dist;
-      //ROS_INFO_NAMED("ackermann_planner", "Distance to path: %f", dist);
-      if( metric < best_metric && std::find(visited_index.begin(), visited_index.end(), i)==visited_index.end()) {
-        visited_index.push_back(i);
-        best_metric = metric;
-        plan_point = i;
-      }
-    }
-    for (int i =0; i<visited_index.size(); i++)
-      //ROS_INFO("visited_index: %d", visited_index[i]);
-    return plan_point;
-  }*/
-
 int LocalPlanner::nearestPoint(const int start_point, const tf::Stamped<tf::Pose> & pose) {
     int plan_point = start_point;
     double best_metric = std::numeric_limits<double>::max();
@@ -86,10 +60,7 @@ int LocalPlanner::nearestPoint(const int start_point, const tf::Stamped<tf::Pose
     //// END ACTIVATION ///
     for( int i=start_point; i<plan_.size(); i++ ) {
       double dist = base_local_planner::getGoalPositionDistance(pose, plan_[i].pose.position.x, plan_[i].pose.position.y);
-      //ROS_INFO("pose in nearest_point: %f, %f", pose.getOrigin().x(), pose.getOrigin().y());
-      //ROS_INFO("dist: %f", dist);
       double metric = dist;
-      //ROS_INFO_NAMED("ackermann_planner", "Distance to path: %f", dist);
       if( metric < best_metric && std::find(visited_index.begin(), visited_index.end(), i)==visited_index.end()) {
       ROS_INFO("metric is smaller");
         best_metric = metric;
@@ -99,11 +70,9 @@ int LocalPlanner::nearestPoint(const int start_point, const tf::Stamped<tf::Pose
               visited_index.push_back(j);
       }
     }
-    //ROS_INFO("target index: %d", plan_.size()-1);
     for (int i =0; i<visited_index.size(); i++){
       //ROS_INFO("visited_index: %d", visited_index[i]);
     }
-    //ROS_INFO("RETURNED PLAN POINT: %d", plan_point);
     return plan_point;
 }
 
@@ -178,19 +147,11 @@ void LocalPlanner::index_calculation_costmap(unsigned int *c_x,unsigned int *c_y
   // ROS_INFO("plan point: %d, plan size: %d", plan_point, plan_.size());
   last_plan_point_ = plan_point;
 
-/*
-  geometry_msgs::PoseStamped extended_plan = plan_[plan_.size()-1];
-  while(plan_.size()<6){
-    plan_.push_back(extended_plan);
-  }
-*/
-  
   if (plan_point < plan_.size()-1){
     int i  = plan_point + 1; 
     geometry_msgs::PoseStamped next_pose = plan_[i];
 
     std::vector<geometry_msgs::PoseStamped> local_plan;
-    //ROS_INFO("before push back local planner");
     for(int i = 0; i< 5; i++){
       geometry_msgs::PoseStamped pose;
       pose.header.frame_id = costmap_ros_->getGlobalFrameID();
@@ -214,11 +175,6 @@ void LocalPlanner::index_calculation_costmap(unsigned int *c_x,unsigned int *c_y
     tf::Matrix3x3 m(q);
     double roll, pitch, yaw;
     m.getRPY(roll, pitch, yaw);
-    //ROS_INFO("robot orientation: %f", yaw);
-   //ROS_INFO("after orientation");
-    
-    
-    
     
     /// INPUT OUTPUT LINEARIZATION
     float MIN_LIN_VEL = -0.0;
@@ -291,17 +247,8 @@ void LocalPlanner::index_calculation_costmap(unsigned int *c_x,unsigned int *c_y
 */
     ///// VFH METHOD
 
-    /*
-    if (plan_.size()<5){
-      position_reached = true;
-    }
-    */
     int costmap_size = costmap_ros_->getCostmap()->getSizeInCellsX();
 
-    
-    //float B1[costmap_size/2][costmap_size];
-    //float m1[costmap_size/2][costmap_size];
-    
     vector<float> h; 
     vector<int> h_index;
     vector<int> h_free;
@@ -335,70 +282,31 @@ void LocalPlanner::index_calculation_costmap(unsigned int *c_x,unsigned int *c_y
       sector_robot  = 3;
     else
       sector_robot  = 4;
-    
-/*
-    if (yaw<= 0.7853981634 && yaw>= -0.7853981634 ){
-    ROS_INFO("SECTOR1");
-    //if (sector ==1){
-      float B1[costmap_size/2][costmap_size];
-      float m1[costmap_size/2][costmap_size];
-      //i  da 150 a 299 
-      //j da 0 a 299
-      for (int l = 0; l< n; l++){
-        h_index.push_back(l*alpha);
-        h.push_back(0);
-        
-        for (int i = costmap_size/2; i< costmap_size;i++){
-            for(int j = 0; j< costmap_size; j++){
-              int cell_cost = costmap_ros_->getCostmap()->getCost(i,j);
-              float x_dist = (i-costmap_size/2)*costmap_ros_->getCostmap()->getResolution();
-              float y_dist = (j-costmap_size/2)*costmap_ros_->getCostmap()->getResolution();
-              B1[i-costmap_size/2][j]=atan2(y_dist, x_dist);
-              //ROS_INFO("B: %f", B1[i-150][j] );
-              m1[i-costmap_size/2][j]=cell_cost*cell_cost * (a1-b1*sqrt(x_dist*x_dist+y_dist*y_dist));
-              if(alpha*int((B1[i-costmap_size/2][j]+1.5707963268)/alpha/0.0174532925)==h_index[l])
-                h[l]+=m1[i-costmap_size/2][j];
-            }
-        }
-	if (h_index[l] <200){
-	//	ROS_INFO("h %d: %f", h_index[l],h[l]);
-	}
-        
-      }   
-    }
-*/
-    if ( sector == 1 ){
-    ROS_INFO("SECTOR1");
-    //if (sector ==1){
-      float B1[costmap_size/2][costmap_size];
-      float m1[costmap_size/2][costmap_size];
-      //i  da 150 a 299 
-      //j da 0 a 299
-      for (int l = 0; l< n; l++){
-        h_index.push_back(l*alpha);
-        h.push_back(0);
-        
-        for (int i = costmap_size/2; i< costmap_size;i++){
-            for(int j = 0; j< costmap_size; j++){
-              int cell_cost = costmap_ros_->getCostmap()->getCost(i,j);
-              float x_dist = (i-costmap_size/2)*costmap_ros_->getCostmap()->getResolution();
-              float y_dist = (j-costmap_size/2)*costmap_ros_->getCostmap()->getResolution();
-              B1[i-costmap_size/2][j]=atan2(y_dist, x_dist);
-              //ROS_INFO("B: %f", B1[i-150][j] );
-              m1[i-costmap_size/2][j]=cell_cost*cell_cost * (a1-b1*sqrt(x_dist*x_dist+y_dist*y_dist));
-              if(alpha*int((B1[i-costmap_size/2][j]+1.5707963268)/alpha/0.0174532925)==h_index[l])
-                h[l]+=m1[i-costmap_size/2][j];
-            }
-        }
-	//ROS_INFO("h %d: %f", h_index[l],h[l]);
-	
-        
-      }   
-    }
 
+    if ( sector == 1 ){
+      float B1[costmap_size/2][costmap_size];
+      float m1[costmap_size/2][costmap_size];
+      //i  da 150 a 299 
+      //j da 0 a 299
+      for (int l = 0; l< n; l++){
+        h_index.push_back(l*alpha);
+        h.push_back(0);
+        
+        for (int i = costmap_size/2; i< costmap_size;i++){
+            for(int j = 0; j< costmap_size; j++){
+              int cell_cost = costmap_ros_->getCostmap()->getCost(i,j);
+              float x_dist = (i-costmap_size/2)*costmap_ros_->getCostmap()->getResolution();
+              float y_dist = (j-costmap_size/2)*costmap_ros_->getCostmap()->getResolution();
+              B1[i-costmap_size/2][j]=atan2(y_dist, x_dist);
+              m1[i-costmap_size/2][j]=cell_cost*cell_cost * (a1-b1*sqrt(x_dist*x_dist+y_dist*y_dist));
+              if(alpha*int((B1[i-costmap_size/2][j]+1.5707963268)/alpha/0.0174532925)==h_index[l])
+                h[l]+=m1[i-costmap_size/2][j];
+            }
+        }
+       }   
+     }
     else if ( sector == 2 ){
     ROS_INFO("SECTOR2");
-    //else if (sector == 2){
       float B1[costmap_size][costmap_size/2];
       float m1[costmap_size][costmap_size/2];
 
@@ -419,12 +327,9 @@ void LocalPlanner::index_calculation_costmap(unsigned int *c_x,unsigned int *c_y
                 h[l]+=m1[i][j - costmap_size/2];
             }
         }
-        //ROS_INFO("h %d: %f", h_index[l],h[l]);
       }
     }
     else if ( sector == 3 ){
-    ROS_INFO("SECTOR3");
-    //else if (sector == 3){
       float B1[costmap_size][costmap_size/2];
       float m1[costmap_size][costmap_size/2];
 
@@ -438,30 +343,21 @@ void LocalPlanner::index_calculation_costmap(unsigned int *c_x,unsigned int *c_y
         for (int i = 0; i< costmap_size;i++){
             for(int j = costmap_size/2; j>0; j--){
               int cell_cost = costmap_ros_->getCostmap()->getCost(i,j);
-              //float x_dist = (costmap_size/2 - i)*costmap_ros_->getCostmap()->getResolution();
-              //float y_dist = (j - costmap_size/2)*costmap_ros_->getCostmap()->getResolution();
               float x_dist = (i - costmap_size/2)*costmap_ros_->getCostmap()->getResolution();
               float y_dist = (j - costmap_size/2)*costmap_ros_->getCostmap()->getResolution();
               B1[i][costmap_size/2 - j]=atan2(y_dist, x_dist);
               m1[i][costmap_size/2 - j]=cell_cost*cell_cost * (a1-b1*sqrt(x_dist*x_dist+y_dist*y_dist));
-              //if(alpha*int((B1[i][costmap_size/2 -j]+1.5707963268)/alpha/0.0174532925)==h_index[l])
               float partial_angle = B1[i][costmap_size/2 -j]+1.5707963268;
               if ( partial_angle < 0 ) {
                 partial_angle += 6.28319;
               }
-
-
               if(alpha*int((partial_angle)/alpha/0.0174532925)==h_index[l])
                 h[l]+=m1[i][costmap_size/2 -j];
             }
         }
-        //ROS_INFO("h %d: %f", h_index[l],h[l]);
       }
     }
-    //else if (yaw>= 2.12058 && yaw<= -2.12058 ){
     else{
-    ROS_INFO("SECTOR4");
-    //else if (sector ==4){
       float B1[costmap_size/2][costmap_size];
       float m1[costmap_size/2][costmap_size];
       //i  da 0 a 150 
@@ -476,7 +372,6 @@ void LocalPlanner::index_calculation_costmap(unsigned int *c_x,unsigned int *c_y
               float x_dist = (i-costmap_size/2)*costmap_ros_->getCostmap()->getResolution();
               float y_dist = (j-costmap_size/2)*costmap_ros_->getCostmap()->getResolution();
               B1[i][j]=atan2(y_dist, x_dist);
-              //ROS_INFO("B: %f", B1[i-150][j] );
               m1[i][j]=cell_cost*cell_cost * (a1-b1*sqrt(x_dist*x_dist+y_dist*y_dist));
               float partial_angle = B1[i][j] + 1.5707963268;
               if ( partial_angle < 0 ) {
@@ -486,15 +381,10 @@ void LocalPlanner::index_calculation_costmap(unsigned int *c_x,unsigned int *c_y
                 h[l]+=m1[i][j];
             }
         }
-
-        //ROS_INFO("h %d: %f", h_index[l],h[l]);
-        
       }   
     }
-    //ROS_INFO("END SECTORS");
+
     float target_angle = (atan2(next_pose.pose.position.y -  current_pose.getOrigin().y(),next_pose.pose.position.x -  current_pose.getOrigin().x())+1.5707963268)/0.0174532925;
-    ///bug between 270 and 360 deg
-    ROS_INFO("TARGET ANGLE CREATED");
     if (target_angle < 0)
       target_angle = 360 + target_angle;
     int min_angle = 5000000;
@@ -504,14 +394,10 @@ void LocalPlanner::index_calculation_costmap(unsigned int *c_x,unsigned int *c_y
     k.push_back(h[0]);k.push_back(h[1]);k.push_back(h[2]);k.push_back(h[3]);k.push_back(h[4]);
     for (int i = l; i<n-l ; i++){
       k.push_back((h[i-l]+2*h[i-l+1]+3*h[i-l+2]+4*h[i-l+3]+5*h[i-l+4]+6*h[i]+5*h[i+l-4]+4*h[i+l-3]+3*h[i+l-2]+2*h[i+l-1]+h[i+l])/(2*l+1));
-      //ROS_INFO("h %d: %f", h_index[i],k[i]);
     }
     k.push_back(h[h.size()-5]);k.push_back(h[h.size()-4]);k.push_back(h[h.size()-3]);k.push_back(h[h.size()-2]);k.push_back(h[h.size()-1]);
     for (int l = 0; l< n; l++){
-            //ROS_INFO("h %d: %f", h_index[l],h[l]);
-
-        //ROS_INFO("h[l]: %f   <  %d    h_free: %d", h[l], threshold, h_index[l]);
-	//change k[l] with h[l]
+	  //change k[l] with h[l]
       if (h[l] < threshold){
         if(sector == 1){
             if (h_index[l] > 0 && h_index[l] < 180){
@@ -546,7 +432,6 @@ void LocalPlanner::index_calculation_costmap(unsigned int *c_x,unsigned int *c_y
           // ROS_INFO("h_free: %d    %f",h_free[l], h[l]);
     }
 
-    //if (sector == 1){
     if (sector == 1){
       for (int l = 1; l< h_free.size(); l++){
         if(h_free[l-1]+alpha == h_free[l]){
@@ -554,19 +439,16 @@ void LocalPlanner::index_calculation_costmap(unsigned int *c_x,unsigned int *c_y
         }
         else{
           valley_center.push_back(h_free[l-1-cnt/2]);
-          //ROS_INFO("cnt: %d", cnt);
           cnt = 0;
         }
         if (l == h_free.size() - 1 ){
           valley_center.push_back(h_free[l-1-cnt/2]);
-          //ROS_INFO("cnt: %d", cnt);
           cnt = 0;
           break;        
         }
       }
     }
 
-    //else if (sector==2){
     else if (sector == 2){
       for (int l = 1; l< h_free.size(); l++){
         if ( h_free[l]<90)    //ignore all free angle of the first sector
@@ -576,18 +458,15 @@ void LocalPlanner::index_calculation_costmap(unsigned int *c_x,unsigned int *c_y
         }
         else{
           valley_center.push_back(h_free[l-1-cnt/2]);
-          //ROS_INFO("cnt: %d", cnt);
           cnt = 0;
         }
         if (l == h_free.size() - 1 ){
           valley_center.push_back(h_free[l-1-cnt/2]);
-          //ROS_INFO("cnt: %d", cnt);
           cnt = 0;
           break;        
         }
       }
     }
-    //else if (sector==3){
     else if (sector == 3 ){
       int start_condition = 0;
       int end_condition = 0; 
@@ -605,7 +484,6 @@ void LocalPlanner::index_calculation_costmap(unsigned int *c_x,unsigned int *c_y
           break;
         }
       }
-      //h_free.erase(h_free.begin(), h_free.end());
       for (int l=start_condition; l>=0; l--){
         h_free_temp.push_back(h_free[l]);
       }
@@ -627,49 +505,18 @@ void LocalPlanner::index_calculation_costmap(unsigned int *c_x,unsigned int *c_y
             valley_center.push_back(h_free[l-1-cnt/2]);
           else
             valley_center.push_back(h_free[l-1-cnt/2]+360);
-          //ROS_INFO("cnt: %d", cnt);
           cnt = 0;
-        }/*
-        if (h_free[l]==85){
-          if (h_free[l-1-cnt/2] >= 0)
-            valley_center.push_back(h_free[l-1-cnt/2]);
-          else
-            valley_center.push_back(h_free[l-1-cnt/2]+360);
-          cnt = 0;
-        }*/
+        }
         if (h_free[l] == -85){
           if (h_free[l-1-cnt/2] >= 0)
             valley_center.push_back(h_free[l-1-cnt/2]);
           else
             valley_center.push_back(h_free[l-1-cnt/2]+360);
-          //ROS_INFO("cnt: %d", cnt);
           cnt = 0;
           break;        
         }
       }
     }
-    //else if (sector==4){
-    /*
-    else if (sector_robot == 4 ){
-      for (int l = 1; l< h_free.size(); l++){
-        if ( h_free[l]<180)    //ignore all free angle of the first and second sector
-          continue;
-        if(h_free[l-1]+alpha == h_free[l]){
-          cnt++;
-        }
-        else{
-          valley_center.push_back(h_free[l-1-cnt/2]);
-          //ROS_INFO("cnt: %d", cnt);
-          cnt = 0;
-        }
-        if (h_free[l] == 355){
-          valley_center.push_back(h_free[l-1-cnt/2]);
-          //ROS_INFO("cnt: %d", cnt);
-          cnt = 0;
-          break;        
-        }
-      }
-    }*/
     else if (sector == 4 ){
       for (int l = 1; l< h_free.size(); l++){
         if(h_free[l-1]+alpha == h_free[l]){
@@ -691,7 +538,6 @@ void LocalPlanner::index_calculation_costmap(unsigned int *c_x,unsigned int *c_y
 
     float h_c = 0; 
 
-    //ROS_INFO("sector: %d", sector);
     for (int l = 0; l< valley_center.size(); l++){
       ROS_INFO("center: %d", valley_center[l]);
       if(abs(target_angle-valley_center[l])< min_angle){
@@ -700,8 +546,6 @@ void LocalPlanner::index_calculation_costmap(unsigned int *c_x,unsigned int *c_y
         min_angle = abs(target_angle-valley_center[l]);
       }
     }
-    //ROS_INFO("sector: %d  target: %f  close: %d  yaw: %f    h_c: %f", sector, target_angle,  close_angle, yaw, h_c);
-
 
     float T = 0.3;
     float tau = 0.4;
@@ -712,8 +556,6 @@ void LocalPlanner::index_calculation_costmap(unsigned int *c_x,unsigned int *c_y
     else
       delta = (close_angle - 90)* 0.0174532925;
     
-    //float new_delta = (T * delta + (tau - T) * old_delta)/tau;
-
     if (delta > 3.14159)
       delta = delta -  6.2831853072;
     float new_delta = delta;
@@ -722,46 +564,26 @@ void LocalPlanner::index_calculation_costmap(unsigned int *c_x,unsigned int *c_y
     float delta_temp = delta;
     float yaw_temp = yaw;
     if (sector == 3){ 
-	if (delta<0)
-		delta_temp = 6.2831853072 + delta;
-	if (yaw<0)
-		yaw_temp = 6.2831853072 + yaw;
-    angular_vel = -yaw_temp + delta_temp;
-	/*
-	if (new_delta>0)
-		angular_vel = yaw - new_delta;
-	else
-		angular_vel = -yaw + new_delta;
-	*/
-    }
+        if (delta<0)
+            delta_temp = 6.2831853072 + delta;
+        if (yaw<0)
+            yaw_temp = 6.2831853072 + yaw;
+        angular_vel = -yaw_temp + delta_temp;
+	}
     else if (sector == 4){ 
-	if (yaw > 0 && delta > 0)
-    		angular_vel = -yaw + delta;
-	else if (yaw > 0 && delta < 0)
-    		angular_vel = yaw - delta;
-	else if (yaw < 0 && delta > 0)
-    		angular_vel = yaw - delta;
-	else
-    		angular_vel = -yaw + delta;
-	
-	/*
-	if (delta<0)
-		delta_temp = 6.2831853072 + delta;
-	if (yaw<0)
-		yaw_temp = 6.2831853072 + yaw;
-	angular_vel = yaw_temp - delta_temp;
-	if (new_delta>0)
-		angular_vel = yaw - new_delta;
-	else
-		angular_vel = -yaw + new_delta;
-	*/
+        if (yaw > 0 && delta > 0)
+                angular_vel = -yaw + delta;
+        else if (yaw > 0 && delta < 0)
+                angular_vel = yaw - delta;
+        else if (yaw < 0 && delta > 0)
+                angular_vel = yaw - delta;
+        else
+                angular_vel = -yaw + delta;
     }
 
     angular_vel = (T * angular_vel + (tau - T) * old_angular_vel)/tau;
     old_angular_vel = angular_vel ;
-    //angular_vel *= 2;
     ROS_INFO("sector: %d  target: %f  close: %d  yaw: %f    delta_temp: %f   yaw_temp: %f   angula_vel: %f", sector, target_angle,  close_angle, yaw, delta_temp, yaw_temp, angular_vel);
-    //ROS_INFO("new_delta: %f", angular_vel);
 
     float h_param = 50000;
     // if is it needed to turn a lot is better do a rotation in place
@@ -771,9 +593,7 @@ void LocalPlanner::index_calculation_costmap(unsigned int *c_x,unsigned int *c_y
     }
     else
 	    linear_vel = 0;
-    //ROS_INFO("h_c: %f", h_c);
-    //ROS_INFO("linear vel: %f", linear_vel);
-    ///// END VFH METHOD
+   ///// END VFH METHOD
     
 
     /// CHECK IF POSITION REACHED AND ROTATE
