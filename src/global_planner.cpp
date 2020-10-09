@@ -123,7 +123,7 @@ float res=0.0;
 
  
  //vector of index around start cell
-   int step = 1;//5; 
+   int step = 10; //5; 
 
  vector<Point> ball_start; 
  for (int i = -step ; i< step; i++)
@@ -157,6 +157,7 @@ float res=0.0;
     }
     cell_value++;
 
+    i++;
     //ROS_INFO("i: %d",i);
     if (std::find(ball_start.begin(), ball_start.end(),Point(index[i].x, index[i].y))!=ball_start.end())
     //if (index[i]==Point(cell_start_x, cell_start_y))
@@ -164,7 +165,7 @@ float res=0.0;
     //if (std::find(index.begin(), index.end(),Point(cell_start_x, cell_start_y))!=index.end()){
     //  break;
     //}
-    i++;
+    //i++;
 
   }
   
@@ -245,8 +246,8 @@ float res=0.0;
   double yaw = yaw_current; 
 
   //added to reduce the vibration in the local planner (cause in the local planner is not taken the next point but a step is introduced)
-  while (index_path.size()<6)
-    index_path.push_back(index_path[index_path.size()-1]);
+ // while (index_path.size()<6)
+ //   index_path.push_back(index_path[index_path.size()-1]);
 
   ROS_INFO("path size: %d",index_path.size());
   for (int i=0; i< index_path.size(); i++){
