@@ -39,7 +39,7 @@ int LocalPlanner::nearestPoint(const int start_point, const tf::Stamped<tf::Pose
     double best_metric = std::numeric_limits<double>::max();
     //// ACTIVATING THIS PIECE OF CODE FORCE THE ROBOT TO PASS AS CLOSE AS POSSIBLE TO THE GLOBAL PLAN ///
     double start_dist = base_local_planner::getGoalPositionDistance(pose, plan_[start_point].pose.position.x, plan_[start_point].pose.position.y);
-    if (start_dist<0.7)
+    if (start_dist<0.2)
       visited_index.push_back(start_point);
     //// END ACTIVATION ///
     for( int i=start_point; i<plan_.size(); i++ ) {
@@ -52,7 +52,10 @@ int LocalPlanner::nearestPoint(const int start_point, const tf::Stamped<tf::Pose
           visited_index.push_back(j);
       }
     }
-    for (int i =0; i<visited_index.size(); i++)
+    for (int i =0; i<visited_index.size(); i++){
+        //ROS_INFO("visited index: %d", i);
+    }
+        
     return plan_point;
 }
 
@@ -112,10 +115,13 @@ void LocalPlanner::index_calculation_costmap(unsigned int *c_x,unsigned int *c_y
   private_nh = ros::NodeHandle("~/" + name);
   l_plan_pub_ = private_nh.advertise<nav_msgs::Path>("local_plan", 1);
   g_plan_pub_ = private_nh.advertise<nav_msgs::Path>("global_plan", 1);
-  private_nh.setParam("/k1", 0.3);
-  private_nh.setParam("/k1", 0.1);
-  private_nh.setParam("/u1_v", 0.0);
-  private_nh.setParam("/u2_v", 0.0);
+  //problem with robot keeping calling the global planner ( maybe because linear and angular velocity smaller than 0.00
+  //private_nh.setParam("/k1", 0.6); //0.3
+  //private_nh.setParam("/k2", 0.1);
+  private_nh.setParam("/k2", 0.5); //0.3
+  private_nh.setParam("/k1", 1);
+  private_nh.setParam("/u1_v", 0);
+  private_nh.setParam("/u2_v", 0);
 
   ros::NodeHandle nh;
   ros::Subscriber local_costmap = nh.subscribe("/move_base/local_costmap/costmap", 1, local_costmap_callback);
@@ -130,12 +136,14 @@ void LocalPlanner::index_calculation_costmap(unsigned int *c_x,unsigned int *c_y
   int plan_point = nearestPoint(last_plan_point_, current_pose);
 
   last_plan_point_ = plan_point;
-
+  //ROS_INFO("PLAN SIZE: %d", plan_.size());
   if (plan_point < plan_.size()){
-    int i  = plan_point + 1; 
+    int i  = plan_point + 2; 
     geometry_msgs::PoseStamped next_pose = plan_[i];
 
+    //int local_size = plan_.size() * 0.8;
     std::vector<geometry_msgs::PoseStamped> local_plan;
+    //for(int i = 0; i< local_size; i++){
     for(int i = 0; i< 5; i++){
       geometry_msgs::PoseStamped pose;
       pose.header.frame_id = costmap_ros_->getGlobalFrameID();
@@ -161,7 +169,7 @@ void LocalPlanner::index_calculation_costmap(unsigned int *c_x,unsigned int *c_y
     float next_point_angle = atan2(next_pose.pose.position.y -  current_pose.getOrigin().y(),next_pose.pose.position.x -  current_pose.getOrigin().x());
 
     if (abs(yaw-next_point_angle)>1){
-      initial_allignment = true;
+      initial_allignment = false; //true;
       ROS_INFO("allignment.....");
     }
     
@@ -181,6 +189,8 @@ void LocalPlanner::index_calculation_costmap(unsigned int *c_x,unsigned int *c_y
     private_nh.getParam("/u2_v", u2_v);
     float u1 =  u1_v + k1 * (next_pose.pose.position.x -  current_pose.getOrigin().x());
     float u2 =  u2_v+ k2 * (next_pose.pose.position.y -  current_pose.getOrigin().y());
+    //ROS_INFO("diff x: %f \t diff y: %f", next_pose.pose.position.x -  current_pose.getOrigin().x(), next_pose.pose.position.y -  current_pose.getOrigin().y());
+    //ROS_INFO("pos x: %f \t diff y: %f", current_pose.getOrigin().x(), current_pose.getOrigin().y());
 
     /// END  INPUT OUTPUT LINEARIZATION
 
@@ -249,9 +259,10 @@ void LocalPlanner::index_calculation_costmap(unsigned int *c_x,unsigned int *c_y
       }
     }
     else{
-    linear_vel = cos(yaw) * u1 + sin(yaw) * u2;
-    angular_vel = - sin(yaw) / b * u1 + cos(yaw) / b * u2;
+    linear_vel = 1 * (cos(yaw) * u1 + sin(yaw) * u2);
+    angular_vel = 1 * (- sin(yaw) / b * u1 + cos(yaw) / b * u2);
 
+    ROS_INFO("linear: %f \t angular: %f", linear_vel, angular_vel);
     
     if (linear_vel > 0)
       linear_vel = min(linear_vel, MAX_LIN_VEL);
@@ -276,7 +287,7 @@ void LocalPlanner::index_calculation_costmap(unsigned int *c_x,unsigned int *c_y
 
     cmd_vel.angular.z = angular_vel; 
   }
-  return valid_velocity;
+  return true; //valid_velocity;
  }
 
  bool LocalPlanner::isGoalReached (){
@@ -301,23 +312,15 @@ void LocalPlanner::index_calculation_costmap(unsigned int *c_x,unsigned int *c_y
 
   goal_pos_x = plan_[plan_.size()-1].pose.position.x;
   goal_pos_y = plan_[plan_.size()-1].pose.position.y;
-  ROS_INFO("LOCAL PLAN SIZE: %d", plan.size());
-
-  for (int i = 0; i < plan.size(); i++)
-    ROS_INFO("x: %f \t y: %f", plan_[i].pose.position.x, plan_[i].pose.position.y);
-
-  base_local_planner::publishPlan(plan, g_plan_pub_);
-
-  for (int i = 0; i<300;i++)
-  for(int j=0; j<300; j++){
-    local_costmap_matrixI(i,j) = i;
-    local_costmap_matrixJ(i,j) = j; 
-    rotation_matrix(i,j) = 0; 
-
+  
+  for (int i = 0; i<300;i++){
+      for(int j=0; j<300; j++){
+        local_costmap_matrixI(i,j) = i;
+        local_costmap_matrixJ(i,j) = j; 
+        rotation_matrix(i,j) = 0; 
+      }
   }
-
   return true; 
   }
- };
 
- //ultima modifica
+ };

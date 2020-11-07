@@ -1,4 +1,3 @@
-
 #include <pluginlib/class_list_macros.h>
 #include "global_planner.h"
 #include <iostream>
@@ -39,7 +38,7 @@ Point::Point(int a, int b){
 int cost_map[4000][4000];
 int path_map[4000][4000];
 
-float res=0.0;
+float res=0.05;
  void GlobalPlanner::initialize(std::string name, costmap_2d::Costmap2DROS* costmap_ros){
   ROS_INFO("COSTMAP BRO");
   int x_size = costmap_ros->getCostmap()->getSizeInCellsX();
@@ -61,8 +60,7 @@ float res=0.0;
   //
   //filter all the cells that are occupied and close to that 
   //
-  //int border = 4; 
-  int border = 0; 
+  int border = 1; //4; 
   vector<Point> allowed;
   bool add = true;
   for(int i = 0; i < 4000; i++){
@@ -81,8 +79,7 @@ float res=0.0;
   }
  
  //vector of index around start cell
-   //int step =  5; 
- int step =  2; 
+   int step = 10; // 5; 
 
  vector<Point> ball_start; 
  for (int i = -step ; i< step; i++)
@@ -116,9 +113,8 @@ float res=0.0;
     if (std::find(ball_start.begin(), ball_start.end(),Point(index[i].x, index[i].y))!=ball_start.end())
       break;
     i++;
-    ROS_INFO("%d", i);
+    //ROS_INFO("I: %d",i);
   }
-  ROS_INFO("GLOBAL PATH FOUND");
   
   //
   //find shortest path
@@ -127,6 +123,8 @@ float res=0.0;
   //point from where the robot start
   index_path.push_back(Point(cell_start_x,cell_start_y));
   //point from where the map path is update
+  
+  //commented to try to remove (keep calling master bug)
   index_path.push_back(Point(index[i].x,index[i].y));
 
   int cell_value_path = path_map[index[i].x][index[i].y];
@@ -155,8 +153,9 @@ float res=0.0;
     i++;
   }
   
+  ROS_INFO("Global path");
   for (int i = 0; i < index_path.size(); i++){
-    //ROS_INFO("x: %d \t y: %d", index_path[i].x, index_path[i].y);
+    ROS_INFO("x: %d \t y: %d", index_path[i].x, index_path[i].y);
   }
   
   tf::Quaternion goal_quat;
@@ -182,8 +181,8 @@ float res=0.0;
   double yaw = yaw_current; 
 
   //added to reduce the vibration in the local planner (cause in the local planner is not taken the next point but a step is introduced)
-  while (index_path.size()<6)
-    index_path.push_back(index_path[index_path.size()-1]);
+  //while (index_path.size()<6)
+  //  index_path.push_back(index_path[index_path.size()-1]);
 
   ROS_INFO("path size: %d",index_path.size());
   for (int i=0; i< index_path.size(); i++){
@@ -199,6 +198,7 @@ float res=0.0;
     new_goal.pose.orientation.z = goal_quat.z();
     new_goal.pose.orientation.w = goal_quat.w();
 
+    ROS_INFO("X: %f \t Y: %f", new_goal.pose.position.x, new_goal.pose.position.y);  
     plan.push_back(new_goal);
    }
    plan.push_back(goal);
