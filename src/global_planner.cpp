@@ -3,205 +3,254 @@
 #include "global_planner.h"
 #include <iostream>
 #include <fstream>
+#include <vector>
 
- //register this planner as a BaseGlobalPlanner plugin
- PLUGINLIB_EXPORT_CLASS(global_planner::GlobalPlanner, nav_core::BaseGlobalPlanner)
 
- using namespace std;
+//register this planner as a BaseGlobalPlanner plugin
+PLUGINLIB_EXPORT_CLASS ( global_planner::GlobalPlanner, nav_core::BaseGlobalPlanner )
+ros::NodeHandle private_nh;
 
- class Point{
-  public:
+using namespace std;
+
+class Point
+{
+public:  
     int x, y;
-    Point(int,int);
-    bool operator==(const Point &b){
-      if (this->x == b.x && this->y == b.y)
-        return true;
-      else
-        return false;
+    Point ( int,int );
+    bool operator== ( const Point &b )
+    {
+        if ( this->x == b.x && this->y == b.y )
+            return true;
+        else
+            return false;
     }
 };
-Point::Point(int a, int b){
-  x = a;
-  y = b;
+Point::Point ( int a, int b )
+{
+    x = a;
+    y = b;
 }
 
- //Default Constructor
- namespace global_planner {
+//Default Constructor
+namespace global_planner
+{
 
- GlobalPlanner::GlobalPlanner (){
+GlobalPlanner::GlobalPlanner ()
+{
 
- }
+}
 
- GlobalPlanner::GlobalPlanner(std::string name, costmap_2d::Costmap2DROS* costmap_ros){
-   initialize(name, costmap_ros);
- }
+GlobalPlanner::GlobalPlanner ( std::string name, costmap_2d::Costmap2DROS* costmap_ros )
+{
+    initialize ( name, costmap_ros );
+}
 
 int cost_map[4000][4000];
 int path_map[4000][4000];
 
 float res=0.0;
- void GlobalPlanner::initialize(std::string name, costmap_2d::Costmap2DROS* costmap_ros){
-  ROS_INFO("COSTMAP BRO");
-  int x_size = costmap_ros->getCostmap()->getSizeInCellsX();
-  int y_size = costmap_ros->getCostmap()->getSizeInCellsY();
-  res = costmap_ros->getCostmap()->getResolution();
-	for(int i= 0; i<x_size; i++){
-		for(int j= 0; j<y_size; j++){
-			cost_map[i][j]=costmap_ros->getCostmap()->getCost(i,j);
-		}
-	}
- }
+void GlobalPlanner::initialize ( std::string name, costmap_2d::Costmap2DROS* costmap_ros )
+{
+    private_nh = ros::NodeHandle("~/" + name);
+    g_points_pub_ = private_nh.advertise<sensor_msgs::PointCloud>("path_reasearch", 1);
+    ball_robot_pub_ = private_nh.advertise<sensor_msgs::PointCloud>("ball_robot", 1);
 
- bool GlobalPlanner::makePlan(const geometry_msgs::PoseStamped& start, const geometry_msgs::PoseStamped& goal,  std::vector<geometry_msgs::PoseStamped>& plan ){
-  int cell_goal_x = (goal.pose.position.x+100)/res;
-  int cell_goal_y = (goal.pose.position.y+100)/res;
-  int cell_start_x = (start.pose.position.x+100)/res;
-  int cell_start_y = (start.pose.position.y+100)/res;
 
-  //
-  //filter all the cells that are occupied and close to that 
-  //
-  //int border = 4; 
-  int border = 0; 
-  vector<Point> allowed;
-  bool add = true;
-  for(int i = 0; i < 4000; i++){
-    for(int j = 0; j < 4000; j++){
-      if (cost_map[i][j] == 0){
-        add = true;
-        for(int l = -border; l < border; l++)
-          for(int m = -border; m < border; m++)
-            if (i+l > 0 && i+l < 4000 && j+m > 0 && j+m < 4000)
-              if (cost_map[i+l][j+m] != 0)
-                add=false;   
-        if(add == true)  
-          allowed.push_back(Point(i,j));
-      }
+    //ROS_INFO ( "COSTMAP BRO" );
+    int x_size = costmap_ros->getCostmap()->getSizeInCellsX();
+    int y_size = costmap_ros->getCostmap()->getSizeInCellsY();
+    res = costmap_ros->getCostmap()->getResolution();
+    for ( int i= 0; i<x_size; i++ ) {
+        for ( int j= 0; j<y_size; j++ ) {
+            cost_map[i][j]=costmap_ros->getCostmap()->getCost ( i,j );
+        }
     }
-  }
- 
- //vector of index around start cell
-   //int step =  5; 
- int step =  2; 
+}
 
- vector<Point> ball_start; 
- for (int i = -step ; i< step; i++)
-  for (int j = -step ; j< step; j++)
-    ball_start.push_back(Point(cell_start_x + i, cell_start_y + j)); 
+bool GlobalPlanner::makePlan ( const geometry_msgs::PoseStamped& start, const geometry_msgs::PoseStamped& goal,  std::vector<geometry_msgs::PoseStamped>& plan )
+{
+    int cell_goal_x = ( goal.pose.position.x+100 ) /res;
+    int cell_goal_y = ( goal.pose.position.y+100 ) /res;
+    int cell_start_x = ( start.pose.position.x+100 ) /res;
+    int cell_start_y = ( start.pose.position.y+100 ) /res;
+    
+    robot_ball_points.points.clear();
+    //
+    //filter all the cells that are occupied and close to that
+    //
+    //int border = 4;
+    int border = 10;
+    vector<Point> allowed;
+    bool add = true;
+    for ( int i = 0; i < 4000; i++ ) {
+        for ( int j = 0; j < 4000; j++ ) {
+            if ( cost_map[i][j] == 0 ) {
+                add = true;
+                for ( int l = -border; l < border; l++ )
+                    for ( int m = -border; m < border; m++ )
+                        if ( i+l > 0 && i+l < 4000 && j+m > 0 && j+m < 4000 )
+                            if ( cost_map[i+l][j+m] != 0 )
+                                add=false;
+                if ( add == true )
+                    allowed.push_back ( Point ( i,j ) );
+            }
+        }
+    }
 
-  vector<Point> index;
-  int cell_value = 0;
-  index.push_back(Point(cell_goal_x,cell_goal_y));
-  int i = 0;
-  while (true){
-    path_map[index[i].x][index[i].y] = cell_value;
-    if (std::find(allowed.begin(), allowed.end(),Point(index[i].x - step, index[i].y))!=allowed.end() && std::find(index.begin(), index.end(),Point(index[i].x -  step, index[i].y))==index.end()){   //check if it is inside the bounderies
-      path_map[index[i].x - step][index[i].y] = cell_value + 1;
-      index.push_back(Point(index[i].x - step, index[i].y));
-    }
-    if (std::find(allowed.begin(), allowed.end(),Point(index[i].x + step, index[i].y))!=allowed.end()  && std::find(index.begin(), index.end(),Point(index[i].x + step, index[i].y))==index.end()){                                 //check if it is inside the bounderies
-      path_map[index[i].x + step][index[i].y] = cell_value + 1;
-      index.push_back(Point(index[i].x + step, index[i].y));
-    }
-    if (std::find(allowed.begin(), allowed.end(),Point(index[i].x, index[i].y - step ))!=allowed.end() && std::find(index.begin(), index.end(),Point(index[i].x, index[i].y  - step))==index.end()){                                    //check if it is inside the bounderies
-      path_map[index[i].x][index[i].y - step] = cell_value + 1;
-      index.push_back(Point(index[i].x, index[i].y  - step));
-    }
-    if (std::find(allowed.begin(), allowed.end(),Point(index[i].x, index[i].y + step))!=allowed.end() && std::find(index.begin(), index.end(),Point(index[i].x, index[i].y  + step))==index.end()){                                 //check if it is inside the bounderies
-      path_map[index[i].x][index[i].y + step] = cell_value + 1;
-      index.push_back(Point(index[i].x, index[i].y + step));
-    }
-    cell_value++;
+//vector of index around start cell
+    //int step =  5;
+    //ball around robot position
+    int step =  10;
 
-    if (std::find(ball_start.begin(), ball_start.end(),Point(index[i].x, index[i].y))!=ball_start.end())
-      break;
-    i++;
-    ROS_INFO("%d", i);
-  }
-  ROS_INFO("GLOBAL PATH FOUND");
-  
-  //
-  //find shortest path
-  //
-  vector<Point> index_path;
-  //point from where the robot start
-  index_path.push_back(Point(cell_start_x,cell_start_y));
-  //point from where the map path is update
-  index_path.push_back(Point(index[i].x,index[i].y));
+    vector<Point> ball_start;
+    for ( int i = -step ; i< step; i++ ){
+        for ( int j = -step ; j< step; j++ ){
+            ball_start.push_back ( Point ( cell_start_x + i, cell_start_y + j ) );
+            robot_points.x = (cell_start_x + i)*res -100;
+            robot_points.y = (cell_start_y + j)*res -100;
+            robot_points.z = 0;
+            robot_ball_points.points.push_back(robot_points);
+            ROS_INFO("Ball X: %f \tY: %f\n", robot_points.x, robot_points.y);
+        }
+    }
+    point_header.frame_id = "/map";
+    robot_ball_points.header = point_header;
+    ball_robot_pub_.publish(robot_ball_points);
 
-  int cell_value_path = path_map[index[i].x][index[i].y];
-  
-  i = 1;
-  while (cell_value_path>0){
-    Point temp(0,0);
-    if (path_map[index_path[i].x - step][index_path[i].y]<cell_value_path && std::find(index.begin(), index.end(),Point(index_path[i].x - step,index_path[i].y))!=index.end()){   //check if it is inside the bounderies
-      cell_value_path = path_map[index_path[i].x - step][index_path[i].y];
-      temp = Point(index_path[i].x - step,index_path[i].y);
+    // step size of the resolution
+    step = 2; 
+    vector<Point> index;
+    int cell_value = 0;
+    index.push_back ( Point ( cell_goal_x,cell_goal_y ) );
+    int i = 0;
+    while ( true ) {
+        path_map[index[i].x][index[i].y] = cell_value;
+        if ( std::find ( allowed.begin(), allowed.end(),Point ( index[i].x - step, index[i].y ) ) !=allowed.end() && std::find ( index.begin(), index.end(),Point ( index[i].x -  step, index[i].y ) ) ==index.end() ) { //check if it is inside the bounderies
+            path_map[index[i].x - step][index[i].y] = cell_value + 1;
+            index.push_back ( Point ( index[i].x - step, index[i].y ) );
+        }
+        if ( std::find ( allowed.begin(), allowed.end(),Point ( index[i].x + step, index[i].y ) ) !=allowed.end()  && std::find ( index.begin(), index.end(),Point ( index[i].x + step, index[i].y ) ) ==index.end() ) {                //check if it is inside the bounderies
+            path_map[index[i].x + step][index[i].y] = cell_value + 1;
+            index.push_back ( Point ( index[i].x + step, index[i].y ) );
+        }
+        if ( std::find ( allowed.begin(), allowed.end(),Point ( index[i].x, index[i].y - step ) ) !=allowed.end() && std::find ( index.begin(), index.end(),Point ( index[i].x, index[i].y  - step ) ) ==index.end() ) {                    //check if it is inside the bounderies
+            path_map[index[i].x][index[i].y - step] = cell_value + 1;
+            index.push_back ( Point ( index[i].x, index[i].y  - step ) );
+        }
+        if ( std::find ( allowed.begin(), allowed.end(),Point ( index[i].x, index[i].y + step ) ) !=allowed.end() && std::find ( index.begin(), index.end(),Point ( index[i].x, index[i].y  + step ) ) ==index.end() ) {                //check if it is inside the bounderies
+            path_map[index[i].x][index[i].y + step] = cell_value + 1;
+            index.push_back ( Point ( index[i].x, index[i].y + step ) );
+        }
+        cell_value++;
+        points.x = (index[i].x*res )-100;
+        points.y = (index[i].y*res )-100;
+        points.z = 0;
+        point_header.frame_id = "/map";
+        visited_point.header = point_header;
+        visited_point.points.push_back(points);
+        /*
+        visited_point.points[0].x = index[i].x;
+        visited_point.points[1] = index[i].y;
+        visited_point.points[2] = 0;*/
+        //visited_points.push_back(visited_point);
+        if ( std::find ( ball_start.begin(), ball_start.end(),Point ( index[i].x, index[i].y ) ) !=ball_start.end() )
+            break;
+        i++;
+         g_points_pub_.publish(visited_point);
+        //ROS_INFO ( "%d", i );
     }
-    if (path_map[index_path[i].x + step][index_path[i].y]<cell_value_path  && std::find(index.begin(), index.end(),Point(index_path[i].x + step,index_path[i].y))!=index.end()){                                 //check if it is inside the bounderies
-      cell_value_path = path_map[index_path[i].x + step][index_path[i].y];
-      temp = Point(index_path[i].x + step,index_path[i].y);
-    }
-    if (path_map[index_path[i].x][index_path[i].y - step]<cell_value_path && std::find(index.begin(), index.end(),Point(index_path[i].x,index_path[i].y-step))!=index.end()){                                    //check if it is inside the bounderies
-      cell_value_path = path_map[index_path[i].x][index_path[i].y - step];
-      temp = Point(index_path[i].x, index_path[i].y - step );
-    }
-    if (path_map[index_path[i].x][index_path[i].y + step]<cell_value_path  && std::find(index.begin(), index.end(),Point(index_path[i].x,index_path[i].y + step))!=index.end()){                                 //check if it is inside the bounderies
-      cell_value_path = path_map[index_path[i].x][index_path[i].y + step];
-      temp = Point(index_path[i].x, index_path[i].y + step);
-    }
-    index_path.push_back(temp);
 
-    i++;
-  }
-  
-  for (int i = 0; i < index_path.size(); i++){
-    //ROS_INFO("x: %d \t y: %d", index_path[i].x, index_path[i].y);
-  }
-  
-  tf::Quaternion goal_quat;
-  plan.push_back(start);
+    //ROS_INFO ( "GLOBAL PATH FOUND" );
+
+    //
+    //find shortest path
+    //
+    vector<Point> index_path;
+    //point from where the robot start
+    index_path.push_back ( Point ( cell_start_x,cell_start_y ) );
+    //point from where the map path is update
+    index_path.push_back ( Point ( index[i].x,index[i].y ) );
+
+    int cell_value_path = path_map[index[i].x][index[i].y];
+
+    i = 1;
+    while ( cell_value_path>0 ) {
+        Point temp ( 0,0 );
+        if ( path_map[index_path[i].x - step][index_path[i].y]<cell_value_path && std::find ( index.begin(), index.end(),Point ( index_path[i].x - step,index_path[i].y ) ) !=index.end() ) { //check if it is inside the bounderies
+            cell_value_path = path_map[index_path[i].x - step][index_path[i].y];
+            temp = Point ( index_path[i].x - step,index_path[i].y );
+        }
+        if ( path_map[index_path[i].x + step][index_path[i].y]<cell_value_path  && std::find ( index.begin(), index.end(),Point ( index_path[i].x + step,index_path[i].y ) ) !=index.end() ) {                       //check if it is inside the bounderies
+            cell_value_path = path_map[index_path[i].x + step][index_path[i].y];
+            temp = Point ( index_path[i].x + step,index_path[i].y );
+        }
+        if ( path_map[index_path[i].x][index_path[i].y - step]<cell_value_path && std::find ( index.begin(), index.end(),Point ( index_path[i].x,index_path[i].y-step ) ) !=index.end() ) {                          //check if it is inside the bounderies
+            cell_value_path = path_map[index_path[i].x][index_path[i].y - step];
+            temp = Point ( index_path[i].x, index_path[i].y - step );
+        }
+        if ( path_map[index_path[i].x][index_path[i].y + step]<cell_value_path  && std::find ( index.begin(), index.end(),Point ( index_path[i].x,index_path[i].y + step ) ) !=index.end() ) {                       //check if it is inside the bounderies
+            cell_value_path = path_map[index_path[i].x][index_path[i].y + step];
+            temp = Point ( index_path[i].x, index_path[i].y + step );
+        }
+        index_path.push_back ( temp );
+
+        i++;
+    }
+    /*
+    for ( int i = 0; i < index_path.size(); i++ ) {
+        ROS_INFO("x: %d \t y: %d", index_path[i].x, index_path[i].y);
+    }
+    */
+    
+    tf::Quaternion goal_quat;
+    plan.push_back( start );
 
     //orientation
 
     //get goal yaw   (g_y goal_yaw)
-    tf::Quaternion g_y(goal.pose.orientation.x,goal.pose.orientation.y,goal.pose.orientation.z,goal.pose.orientation.w);
-    tf::Matrix3x3 m(g_y);
+    tf::Quaternion g_y ( goal.pose.orientation.x,goal.pose.orientation.y,goal.pose.orientation.z,goal.pose.orientation.w );
+    tf::Matrix3x3 m ( g_y );
     double roll, pitch, yaw_goal, yaw_current;
-    m.getRPY(roll, pitch, yaw_goal);
+    m.getRPY ( roll, pitch, yaw_goal );
 
     //get current yaw (c_y current_yaw)
-    tf::Quaternion c_y(start.pose.orientation.x,start.pose.orientation.y,start.pose.orientation.z,start.pose.orientation.w);
-    tf::Matrix3x3 m1(c_y);
-    m1.getRPY(roll, pitch, yaw_current);
+    tf::Quaternion c_y ( start.pose.orientation.x,start.pose.orientation.y,start.pose.orientation.z,start.pose.orientation.w );
+    tf::Matrix3x3 m1 ( c_y );
+    m1.getRPY ( roll, pitch, yaw_current );
 
-    double yaw_diff = yaw_goal - yaw_current; 
-    double increment = yaw_diff/double(index_path.size()); 
+    double yaw_diff = yaw_goal - yaw_current;
+    double increment = yaw_diff/double ( index_path.size() );
 
-  float old_angle = 0; 
-  double yaw = yaw_current; 
+    float old_angle = 0;
+    double yaw = yaw_current;
 
-  //added to reduce the vibration in the local planner (cause in the local planner is not taken the next point but a step is introduced)
-  while (index_path.size()<6)
-    index_path.push_back(index_path[index_path.size()-1]);
+    //added to reduce the vibration in the local planner (cause in the local planner is not taken the next point but a step is introduced)
+    while ( index_path.size() <6 )
+        index_path.push_back( index_path[index_path.size()-1] );
 
-  ROS_INFO("path size: %d",index_path.size());
-  for (int i=0; i< index_path.size(); i++){
-    geometry_msgs::PoseStamped new_goal = goal;
-    yaw+= increment; 
-    goal_quat = tf::createQuaternionFromYaw(increment);
+    //ROS_INFO ( "path size: %d",index_path.size() );
+    for ( int i=0; i< index_path.size(); i++ ) {
+        geometry_msgs::PoseStamped new_goal = goal;
+        yaw+= increment;
+        goal_quat = tf::createQuaternionFromYaw ( increment );
+
+        new_goal.pose.position.x = ( index_path[i].x*res )-100;
+        new_goal.pose.position.y = ( index_path[i].y*res )-100;
+
+        new_goal.pose.orientation.x = goal_quat.x();
+        new_goal.pose.orientation.y = goal_quat.y();
+        new_goal.pose.orientation.z = goal_quat.z();
+        new_goal.pose.orientation.w = goal_quat.w();
+
+        plan.push_back( new_goal );
+    }
+    ROS_INFO("PLAN SIZE: %d\n", (int)plan.size());
+    plan.push_back( goal );
+    for (int i = 0; i < (int)plan.size(); i++)
+        ROS_INFO("x: %lf\ty: %lf", plan[i].pose.position.x, plan[i].pose.position.y);
     
-    new_goal.pose.position.x = (index_path[i].x*res)-100;
-    new_goal.pose.position.y = (index_path[i].y*res)-100;
+    //base_local_planner::publishPlan(plan, g_plan_pub_);  
 
-    new_goal.pose.orientation.x = goal_quat.x();
-    new_goal.pose.orientation.y = goal_quat.y();
-    new_goal.pose.orientation.z = goal_quat.z();
-    new_goal.pose.orientation.w = goal_quat.w();
-
-    plan.push_back(new_goal);
-   }
-   plan.push_back(goal);
-   return true;
-  }
- };
+    return true;
+}
+};

@@ -8,10 +8,16 @@
  #include <angles/angles.h>
  #include <base_local_planner/world_model.h>
  #include <base_local_planner/costmap_model.h>
-
+ #include <nav_core/base_global_planner.h>
+ #include <nav_msgs/Path.h>
 #include <tf/tf.h>
 #include <nav_msgs/Odometry.h>
 #include <geometry_msgs/Pose2D.h>
+#include <sensor_msgs/PointCloud.h>
+#include <geometry_msgs/Point32.h>
+#include <std_msgs/Header.h>
+
+#include <vector>
  using std::string;
 
  #ifndef GLOBAL_PLANNER_CPP
@@ -20,17 +26,24 @@
  namespace global_planner {
 
  class GlobalPlanner : public nav_core::BaseGlobalPlanner {
- public:
+    ros::Publisher g_plan_pub_, g_points_pub_, ball_robot_pub_;
+    std::vector<sensor_msgs::PointCloud> visited_points;
+    sensor_msgs::PointCloud visited_point;
+    sensor_msgs::PointCloud robot_ball_points;
+    geometry_msgs::Point32 points, robot_points;
+    std_msgs::Header point_header;
 
-  GlobalPlanner();
-  GlobalPlanner(std::string name, costmap_2d::Costmap2DROS* costmap_ros);
+    public:
 
-  /** overridden classes from interface nav_core::BaseGlobalPlanner **/
-  void initialize(std::string name, costmap_2d::Costmap2DROS* costmap_ros);
-  bool makePlan(const geometry_msgs::PoseStamped& start,
-                const geometry_msgs::PoseStamped& goal,
-                std::vector<geometry_msgs::PoseStamped>& plan
-               );
-  };
+    GlobalPlanner();
+    GlobalPlanner(std::string name, costmap_2d::Costmap2DROS* costmap_ros);
+
+    /** overridden classes from interface nav_core::BaseGlobalPlanner **/
+    void initialize(std::string name, costmap_2d::Costmap2DROS* costmap_ros);
+    bool makePlan(const geometry_msgs::PoseStamped& start,
+                    const geometry_msgs::PoseStamped& goal,
+                    std::vector<geometry_msgs::PoseStamped>& plan
+                );
+    };
  };
  #endif
