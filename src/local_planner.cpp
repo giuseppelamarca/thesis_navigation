@@ -1,3 +1,4 @@
+
 #include "local_planner.h"
 #include <iostream>
 #include <fstream>
@@ -118,10 +119,10 @@ void LocalPlanner::index_calculation_costmap(unsigned int *c_x,unsigned int *c_y
   l_plan_pub_ = private_nh.advertise<nav_msgs::Path>("local_plan", 1);
   g_plan_pub_ = private_nh_g.advertise<nav_msgs::Path>("global_plan", 1);
   //problem with robot keeping calling the global planner ( maybe because linear and angular velocity smaller than 0.00
-  private_nh.setParam("/k1", 0.6); //0.3
-  private_nh.setParam("/k2", 0.1);
-  //private_nh.setParam("/k2", 0.5); 
-  //private_nh.setParam("/k1", 1);
+  //private_nh.setParam("/k1", 0.6); //0.3
+  //private_nh.setParam("/k2", 0.1);
+  private_nh.setParam("/k2", 0.2); 
+  private_nh.setParam("/k1", 0.5);
   private_nh.setParam("/u1_v", 0);
   private_nh.setParam("/u2_v", 0);
 
@@ -181,8 +182,8 @@ void LocalPlanner::index_calculation_costmap(unsigned int *c_x,unsigned int *c_y
     float MIN_ANG_VEL = -0.3;  //0.2;
     float MAX_ANG_VEL = 0.3; //0.2;
     float b =  0.35;
-    float k1 = 0.3;//0.3; 
-    float k2 = 0.6; //0.15;
+    float k1 = 0.3; 
+    float k2 = 0.15;
     float u1_v = 0;
     float u2_v = 0;
     private_nh.getParam("/k1", k1);
@@ -304,9 +305,12 @@ void LocalPlanner::index_calculation_costmap(unsigned int *c_x,unsigned int *c_y
   goal_reached = false;
   initial_allignment = false;
   plan_ = plan;
+  /*
   ROS_INFO("GOT PLAN");
-  for (int i = 0; i < (int)plan.size(); i++)
+  for (int i = 0; i < (int)plan.size(); i++){
     ROS_INFO("X: %lf\t\tY: %lf", plan[i].pose.position.x, plan[i].pose.position.y);
+  }
+  */
   last_plan_point_ = 0;
   visited_index.clear();
   start_rotation = false;

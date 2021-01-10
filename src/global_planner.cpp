@@ -79,7 +79,7 @@ bool GlobalPlanner::makePlan ( const geometry_msgs::PoseStamped& start, const ge
     //filter all the cells that are occupied and close to that
     //
     //int border = 4;
-    int border = 10;
+    int border = 6;
     vector<Point> allowed;
     bool add = true;
     for ( int i = 0; i < 4000; i++ ) {
@@ -110,7 +110,7 @@ bool GlobalPlanner::makePlan ( const geometry_msgs::PoseStamped& start, const ge
             robot_points.y = (cell_start_y + j)*res -100;
             robot_points.z = 0;
             robot_ball_points.points.push_back(robot_points);
-            ROS_INFO("Ball X: %f \tY: %f\n", robot_points.x, robot_points.y);
+            //ROS_INFO("Ball X: %f \tY: %f\n", robot_points.x, robot_points.y);
         }
     }
     point_header.frame_id = "/map";
@@ -246,8 +246,9 @@ bool GlobalPlanner::makePlan ( const geometry_msgs::PoseStamped& start, const ge
     }
     ROS_INFO("PLAN SIZE: %d\n", (int)plan.size());
     plan.push_back( goal );
-    for (int i = 0; i < (int)plan.size(); i++)
-        ROS_INFO("x: %lf\ty: %lf", plan[i].pose.position.x, plan[i].pose.position.y);
+    for (int i = 0; i < (int)plan.size(); i++){
+        //ROS_INFO("x: %lf\ty: %lf", plan[i].pose.position.x, plan[i].pose.position.y);
+    }
     
     //base_local_planner::publishPlan(plan, g_plan_pub_);  
 
